@@ -5,7 +5,17 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import type { Profile } from "@/supabase/database.types";
+
+// Inline profile type to avoid coupling to generated types file
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: "partner" | "admin";
+  phone: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export const getSession = cache(async () => {
   const supabase = await createServerClient();
