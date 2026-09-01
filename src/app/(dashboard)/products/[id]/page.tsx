@@ -67,6 +67,21 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               </div>
             )}
           </section>
+
+          <nav className="flex gap-3">
+            <Link
+              href={`/dashboard/products/${id}/story`}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Story {story ? "✓" : "(add)"}
+            </Link>
+            <Link
+              href={`/dashboard/products/${id}/makers`}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Makers {makers?.length ? `(${makers.length})` : "(add)"}
+            </Link>
+          </nav>
         </div>
 
         <div className="space-y-6">
