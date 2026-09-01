@@ -25,19 +25,26 @@ export const getSession = cache(async () => {
 });
 
 export const getUser = cache(async () => {
-  const { session } = await getSession();
-  return session?.user ?? null;
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  console.log("[DEBUG] getUser result:", user ? { id: user.id, email: user.email } : null);
+  return user ?? null;
 });
 
 export const getProfile = cache(async (): Promise<Profile | null> => {
   const user = await getUser();
-  if (!user) return null;
+  if (!user) {
+    console.log("[DEBUG] getProfile: no user from getUser()");
+    return null;
+  }
+  console.log("[DEBUG] getProfile: user found, querying profiles table for id:", user.id);
   const supabase = await createServerClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single<Profile>();
+  console.log("[DEBUG] getProfile: query result:", data, "error:", error);
   return data ?? null;
 });
 

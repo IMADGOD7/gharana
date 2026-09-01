@@ -15,6 +15,7 @@ export function Input({ label, error, className = "", id, ...props }: InputProps
       </label>
       <input
         id={inputId}
+        suppressHydrationWarning
         className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${error ? "border-red-300" : ""} ${className}`}
         {...props}
       />
@@ -38,6 +39,7 @@ export function Textarea({ label, error, className = "", id, ...props }: Textare
       </label>
       <textarea
         id={textareaId}
+        suppressHydrationWarning
         rows={4}
         className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${error ? "border-red-300" : ""} ${className}`}
         {...props}
@@ -64,6 +66,7 @@ export function Select({ label, options, error, placeholder, className = "", id,
       </label>
       <select
         id={selectId}
+        suppressHydrationWarning
         className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${error ? "border-red-300" : ""} ${className}`}
         {...props}
       >

@@ -10,9 +10,14 @@ export default async function DashboardLayout({
 }) {
   const profile = await getProfile();
 
+  console.log("[DEBUG] DashboardLayout profile:", profile);
+
   if (!profile) {
+    console.log("[DEBUG] No profile, redirecting to /login");
     redirect("/login");
   }
+
+  console.log("[DEBUG] Profile found:", profile.email, profile.role);
 
   const isAdmin = profile.role === "admin";
 
@@ -45,6 +50,7 @@ export default async function DashboardLayout({
           <form action={signOut}>
             <button
               type="submit"
+              suppressHydrationWarning
               className="mt-3 text-sm text-red-600 hover:text-red-700"
             >
               Sign out

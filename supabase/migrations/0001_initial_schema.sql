@@ -254,10 +254,8 @@ create policy "Admins can view all profiles"
   on public.profiles for select
   to authenticated
   using (
-    exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role = 'admin'
-    )
+    (auth.jwt() ->> 'user_role')::text = 'admin'
+    or auth.uid() = id
   );
 
 -- -- Partner Profiles --

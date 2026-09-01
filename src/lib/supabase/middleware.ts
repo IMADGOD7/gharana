@@ -1,12 +1,14 @@
 // ============================================================
 // Supabase Auth Middleware (T0.4)
-// Refreshes sessions and protects routes
+// Refreshes sessions on every request
 // ============================================================
 
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function updateSession(request: NextRequest) {
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -16,55 +18,23 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set({ name, value, ...options });
-          });
-          const response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set({ name, value })
           );
-          return response;
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set({ name, value, ...options })
+          );
         },
       },
     }
   );
 
-  await supabase.auth.getSession();
-  return request;
-}
+  await supabase.auth.getUser();
 
-export function isPublicPath(pathname: string): boolean {
-  const publicPaths = [
-    "/",
-    "/login",
-    "/signup",
-    "/auth/callback",
-    "/auth/reset-password",
-    "/forgot-password",
-  ];
+  console.log("[MIDDLEWARE] Auth check complete, request:", request.nextUrl.pathname);
 
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    /\.(ico|png|jpg|jpeg|svg|gif|webp)$/.test(pathname)
-  ) {
-    return true;
-  }
-
-  return publicPaths.some(
-    (path) => pathname === path || pathname.startsWith(path + "/")
-  );
-}
-
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const refreshedRequest = await updateSession(request);
-
-  if (isPublicPath(pathname)) {
-    return NextResponse.next({ request: refreshedRequest });
-  }
-
-  return NextResponse.next({ request: refreshedRequest });
+  return response;
 }
 
 export const config = {
