@@ -28,6 +28,7 @@ export function Button({
     <button
       className={`${base} ${variants[variant]} ${fullWidth ? "w-full" : ""} ${className}`}
       disabled={disabled}
+      suppressHydrationWarning
       {...props}
     >
       {children}
