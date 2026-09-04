@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
 import { ProductForm } from "@/components/products/product-form";
 import type { ProductFormData } from "@/lib/products/actions";
 
