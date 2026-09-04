@@ -10,14 +10,14 @@ import type { ShopRow } from "@/lib/shops/actions";
 interface ShopFormProps {
   productId?: string;
   initial?: ShopRow | null;
-  allShops?: ShopRow[];
+  _allShops?: ShopRow[];
 }
 
 function toDate(val: string | null | undefined): string {
   return val ?? "";
 }
 
-export function ShopFormClient({ productId, initial, allShops }: ShopFormProps) {
+export function ShopFormClient({ productId, initial, _allShops = [] }: ShopFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);

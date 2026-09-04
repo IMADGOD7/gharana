@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { updateProduct } from "@/lib/products/actions";
 import { ProductForm } from "@/components/products/product-form";
 import type { ProductFormData } from "@/lib/products/actions";
 
@@ -21,7 +20,6 @@ interface EditProductFormProps {
 }
 
 export function EditProductForm({ product }: EditProductFormProps) {
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const initial: Partial<ProductFormData> = {
@@ -33,20 +31,6 @@ export function EditProductForm({ product }: EditProductFormProps) {
     price_max: product.price_max?.toString() ?? "",
     currency: product.currency,
   };
-
-  async function handleAction(formData: FormData): Promise<{ ok: boolean; error?: string }> {
-    setError(null);
-    setSuccess(false);
-    const result = await updateProduct(product.id, formData);
-    if (result.ok) {
-      setSuccess(true);
-      return { ok: true };
-    } else {
-      const errMsg = result.error || "Failed to update product";
-      setError(errMsg);
-      return { ok: false, error: errMsg };
-    }
-  }
 
   if (success) {
     return (
@@ -69,11 +53,6 @@ export function EditProductForm({ product }: EditProductFormProps) {
         Update your product details. Changes are saved as draft.
       </p>
       <div className="mt-8 max-w-2xl">
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
         <ProductForm mode="edit" productId={product.id} initial={initial} submitLabel="Save changes" />
       </div>
     </div>

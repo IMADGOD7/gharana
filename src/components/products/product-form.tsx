@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, Select } from "@/components/ui/input";
@@ -137,12 +138,12 @@ export function ProductForm({ mode, productId, initial, submitLabel }: ProductFo
 
       <div className="flex gap-3">
         <SubmitButton submitLabel={submitLabel} />
-        <a
+        <Link
           href="/dashboard/products"
           className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
         >
           Cancel
-        </a>
+        </Link>
       </div>
     </form>
   );

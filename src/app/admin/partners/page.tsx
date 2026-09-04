@@ -1,5 +1,4 @@
 import { getAllPartners } from "@/lib/admin/actions";
-import Link from "next/link";
 
 export default async function AdminPartnersPage() {
   const partners = await getAllPartners();

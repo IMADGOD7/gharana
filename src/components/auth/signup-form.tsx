@@ -1,14 +1,62 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signUp } from "@/lib/auth/actions";
+import { createClient } from "@/lib/supabase/client";
 
 export function SignupForm() {
-  const [state, formAction, pending] = useActionState(signUp, null);
+  const router = useRouter();
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  if (state?.ok) {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    if (!fullName.trim() || !email.trim() || !password) {
+      setError("All fields are required");
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: { full_name: fullName.trim() },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      setSent(true);
+      setLoading(false);
+    } catch (e) {
+      setError("Something went wrong. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  if (sent) {
     return (
       <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-6 text-center">
         <p className="text-sm font-medium text-green-800">Check your email</p>
@@ -25,10 +73,10 @@ export function SignupForm() {
   }
 
   return (
-    <form action={formAction} className="space-y-4" suppressHydrationWarning>
-      {state?.ok === false && (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {state.error}
+          {error}
         </div>
       )}
 
@@ -38,8 +86,9 @@ export function SignupForm() {
         </label>
         <input
           id="full_name"
-          name="full_name"
           type="text"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
           required
           autoComplete="name"
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -54,8 +103,9 @@ export function SignupForm() {
         </label>
         <input
           id="email"
-          name="email"
           type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           required
           autoComplete="email"
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -70,8 +120,9 @@ export function SignupForm() {
         </label>
         <input
           id="password"
-          name="password"
           type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           required
           minLength={8}
           autoComplete="new-password"
@@ -79,16 +130,15 @@ export function SignupForm() {
           placeholder="At least 8 characters"
           suppressHydrationWarning
         />
-        <p className="mt-1 text-xs text-gray-500">Minimum 8 characters</p>
       </div>
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={loading}
         className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         suppressHydrationWarning
       >
-        {pending ? "Creating account..." : "Create account"}
+        {loading ? "Creating account..." : "Create account"}
       </button>
     </form>
   );

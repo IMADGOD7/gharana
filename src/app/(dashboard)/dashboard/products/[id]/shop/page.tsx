@@ -1,5 +1,5 @@
 import { getProduct } from "@/lib/products/actions";
-import { getShop, getPartnerShops } from "@/lib/shops/actions";
+import { getPartnerShops } from "@/lib/shops/actions";
 import { notFound } from "next/navigation";
 import { ShopFormClient } from "@/components/products/shop-form";
 
