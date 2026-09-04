@@ -20,8 +20,6 @@ interface EditProductFormProps {
 }
 
 export function EditProductForm({ product }: EditProductFormProps) {
-  const [success, setSuccess] = useState(false);
-
   const initial: Partial<ProductFormData> = {
     title: product.title,
     description: product.description,
@@ -31,20 +29,6 @@ export function EditProductForm({ product }: EditProductFormProps) {
     price_max: product.price_max?.toString() ?? "",
     currency: product.currency,
   };
-
-  if (success) {
-    return (
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Edit Product</h1>
-        <div className="mt-8 rounded-xl border border-green-200 bg-green-50 p-6 text-center">
-          <p className="text-sm font-medium text-green-800">Product updated</p>
-          <Link href={`/dashboard/products/${product.id}`} className="mt-2 inline-block text-sm text-blue-600 hover:underline">
-            View product
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div>
