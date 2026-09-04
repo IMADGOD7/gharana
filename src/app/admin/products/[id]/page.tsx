@@ -1,5 +1,4 @@
 import { getAdminProduct } from "@/lib/admin/actions";
-import { reviewProduct } from "@/lib/admin/actions";
 import { notFound } from "next/navigation";
 import { ReviewFormClient } from "@/components/admin/review-form";
 
@@ -10,13 +9,6 @@ export default async function AdminProductReviewPage({ params }: { params: Promi
   if (!product) {
     notFound();
   }
-
-  // Curried server action — reviewProduct(productId, decision, notes)
-  const submitReview = async (productId: string, formData: FormData) => {
-    const decision = String(formData.get("decision") || "") as "approve" | "reject" | "request_changes";
-    const notes = String(formData.get("notes") || "");
-    return reviewProduct(productId, decision, notes);
-  };
 
   return (
     <div>
@@ -75,7 +67,7 @@ export default async function AdminProductReviewPage({ params }: { params: Promi
         <div className="space-y-6">
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900">Review</h2>
-            <ReviewFormClient productId={product.id} action={submitReview} />
+            <ReviewFormClient productId={product.id} />
           </section>
         </div>
       </div>

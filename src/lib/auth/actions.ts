@@ -75,7 +75,6 @@ export async function signIn(
   }
 
   console.log("[DEBUG] signIn success — auth cookies set by supabase client");
-
   return { ok: true, message: "Signed in" };
 }
 

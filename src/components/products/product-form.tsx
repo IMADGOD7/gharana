@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, Select } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
+import { createProduct, updateProduct } from "@/lib/products/actions";
 import type { ProductFormData } from "@/lib/products/actions";
 
 interface ProductFormProps {
-  action: (formData: FormData) => Promise<{ ok: boolean; error?: string; data?: { id: string } }>;
+  mode: "create" | "edit";
+  productId?: string;
   initial?: Partial<ProductFormData>;
   submitLabel?: string;
 }
@@ -22,33 +25,39 @@ function SubmitButton({ submitLabel }: { submitLabel?: string }) {
   );
 }
 
-export function ProductForm({ action, initial, submitLabel }: ProductFormProps) {
+export function ProductForm({ mode, productId, initial, submitLabel }: ProductFormProps) {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   async function handleAction(formData: FormData) {
     setError(null);
     setSuccess(false);
-    const result = await action(formData);
+
+    const result = mode === "create"
+      ? await createProduct(formData)
+      : await updateProduct(productId!, formData);
+
     if (result.ok) {
-      setSuccess(true);
+      if (mode === "create") {
+        const created = result as { ok: true; data: { id: string } };
+        router.push(`/dashboard/products/${created.data.id}`);
+      } else {
+        setSuccess(true);
+        router.refresh();
+      }
     } else {
       setError(result.error || "Something went wrong");
     }
   }
 
-  if (success) {
-    return (
-      <Alert variant="success">
-        Product saved as draft. You can continue editing or submit it for review.
-      </Alert>
-    );
-  }
-
   return (
-    <form action={handleAction} className="space-y-6">
+    <form action={handleAction} className="space-y-6" suppressHydrationWarning>
       {error && (
         <Alert variant="error">{error}</Alert>
+      )}
+      {success && mode === "edit" && (
+        <Alert variant="success">Product updated successfully.</Alert>
       )}
 
       <div className="space-y-4">
@@ -58,6 +67,7 @@ export function ProductForm({ action, initial, submitLabel }: ProductFormProps) 
           required
           defaultValue={initial?.title}
           placeholder="e.g., Handwoven Silk Scarf"
+          suppressHydrationWarning
         />
 
         <Textarea
@@ -66,6 +76,7 @@ export function ProductForm({ action, initial, submitLabel }: ProductFormProps) 
           required
           defaultValue={initial?.description}
           placeholder="Describe your product in detail..."
+          suppressHydrationWarning
         />
 
         <Select
@@ -89,6 +100,7 @@ export function ProductForm({ action, initial, submitLabel }: ProductFormProps) 
           name="tags"
           defaultValue={initial?.tags}
           placeholder="handmade, silk, traditional (comma-separated)"
+          suppressHydrationWarning
         />
 
         <div className="grid grid-cols-2 gap-4">
@@ -100,6 +112,7 @@ export function ProductForm({ action, initial, submitLabel }: ProductFormProps) 
             min="0"
             defaultValue={initial?.price_min}
             placeholder="0.00"
+            suppressHydrationWarning
           />
           <Input
             label="Max Price"
@@ -109,6 +122,7 @@ export function ProductForm({ action, initial, submitLabel }: ProductFormProps) 
             min="0"
             defaultValue={initial?.price_max}
             placeholder="0.00"
+            suppressHydrationWarning
           />
         </div>
 
@@ -117,6 +131,7 @@ export function ProductForm({ action, initial, submitLabel }: ProductFormProps) 
           name="currency"
           defaultValue={initial?.currency ?? "INR"}
           placeholder="INR"
+          suppressHydrationWarning
         />
       </div>
 

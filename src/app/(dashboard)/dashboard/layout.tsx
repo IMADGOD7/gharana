@@ -34,6 +34,7 @@ export default async function DashboardLayout({
           <DashboardLink href="/dashboard" label="Dashboard" />
           <DashboardLink href="/dashboard/products" label="My Products" />
           <DashboardLink href="/dashboard/products/new" label="New Product" />
+          <DashboardLink href="/dashboard/shops" label="My Shops" />
           <DashboardLink href="/dashboard/profile" label="Profile" />
           {isAdmin && (
             <>

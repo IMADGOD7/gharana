@@ -5,19 +5,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { submitReviewAction } from "@/lib/admin/actions";
 
 interface ReviewFormProps {
   productId: string;
-  action: (productId: string, formData: FormData) => Promise<{ ok: boolean; error?: string }>;
 }
 
-export function ReviewFormClient({ productId, action }: ReviewFormProps) {
+export function ReviewFormClient({ productId }: ReviewFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [decision, setDecision] = useState<string>("");
 
-  async function handleAction(_formData: FormData) {
+  async function handleAction(formData: FormData) {
     if (!decision) {
       setError("Please select a decision");
       return;
@@ -25,7 +25,9 @@ export function ReviewFormClient({ productId, action }: ReviewFormProps) {
 
     setError(null);
     setSuccess(false);
-    const result = await action(productId, _formData);
+    formData.set("productId", productId);
+    formData.set("decision", decision);
+    const result = await submitReviewAction(formData);
     if (result.ok) {
       setSuccess(true);
       router.refresh();
@@ -55,7 +57,7 @@ export function ReviewFormClient({ productId, action }: ReviewFormProps) {
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="radio"
-              name="decision"
+              name="decision_radio"
               value="approve"
               checked={decision === "approve"}
               onChange={(e) => setDecision(e.target.value)}
@@ -66,7 +68,7 @@ export function ReviewFormClient({ productId, action }: ReviewFormProps) {
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="radio"
-              name="decision"
+              name="decision_radio"
               value="request_changes"
               checked={decision === "request_changes"}
               onChange={(e) => setDecision(e.target.value)}
@@ -77,7 +79,7 @@ export function ReviewFormClient({ productId, action }: ReviewFormProps) {
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="radio"
-              name="decision"
+              name="decision_radio"
               value="reject"
               checked={decision === "reject"}
               onChange={(e) => setDecision(e.target.value)}
@@ -86,7 +88,6 @@ export function ReviewFormClient({ productId, action }: ReviewFormProps) {
             <span className="text-sm text-gray-700">Reject</span>
           </label>
         </div>
-        <input type="hidden" name="decision_hidden" value={decision} />
       </div>
 
       <div>

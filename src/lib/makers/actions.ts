@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth/session";
+import { getOrCreatePartnerProfile } from "@/lib/products/actions";
 
 type MakerRow = {
   id: string;
@@ -33,11 +34,7 @@ export async function getMakers(productId: string): Promise<MakerRow[]> {
 
     if (!product) return [];
 
-    const { data: partnerProfile } = await supabase
-      .from("partner_profiles")
-      .select("id")
-      .eq("user_id", profile.id)
-      .single<{ id: string }>();
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
 
     if (!partnerProfile || product.partner_id !== partnerProfile.id) {
       return [];
@@ -67,11 +64,7 @@ export async function createMaker(productId: string, formData: FormData) {
       return { ok: false as const, error: "Product not found" };
     }
 
-    const { data: partnerProfile } = await supabase
-      .from("partner_profiles")
-      .select("id")
-      .eq("user_id", profile.id)
-      .single<{ id: string }>();
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
 
     if (!partnerProfile || product.partner_id !== partnerProfile.id) {
       return { ok: false as const, error: "Not authorized" };
@@ -112,6 +105,18 @@ export async function createMaker(productId: string, formData: FormData) {
   return { ok: true as const };
 }
 
+// ============================================================
+// Client-callable wrapper — reads productId from FormData
+// so the client component doesn't need a curried server action prop.
+// ============================================================
+export async function addMakerAction(formData: FormData) {
+  const productId = String(formData.get("productId") || "");
+  if (!productId) {
+    return { ok: false as const, error: "Missing product ID" };
+  }
+  return createMaker(productId, formData);
+}
+
 export async function deleteMaker(productId: string, makerId: string) {
   const profile = await requireAuth();
   const supabase = await createServerClient();
@@ -127,11 +132,7 @@ export async function deleteMaker(productId: string, makerId: string) {
       return { ok: false as const, error: "Product not found" };
     }
 
-    const { data: partnerProfile } = await supabase
-      .from("partner_profiles")
-      .select("id")
-      .eq("user_id", profile.id)
-      .single<{ id: string }>();
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
 
     if (!partnerProfile || product.partner_id !== partnerProfile.id) {
       return { ok: false as const, error: "Not authorized" };

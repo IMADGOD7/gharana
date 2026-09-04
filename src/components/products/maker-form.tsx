@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { addMakerAction } from "@/lib/makers/actions";
 
 interface MakerFormProps {
-  _productId: string;
-  action: (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
+  productId: string;
   onSuccess?: () => void;
 }
 
-export function MakerFormClient({ _productId, action }: MakerFormProps) {
+export function MakerFormClient({ productId }: MakerFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -18,7 +18,7 @@ export function MakerFormClient({ _productId, action }: MakerFormProps) {
   async function handleAction(formData: FormData) {
     setError(null);
     setSuccess(false);
-    const result = await action(formData);
+    const result = await addMakerAction(formData);
     if (result.ok) {
       setSuccess(true);
       router.refresh();
@@ -33,6 +33,8 @@ export function MakerFormClient({ _productId, action }: MakerFormProps) {
 
   return (
     <form action={handleAction} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
+      {/* Hidden field so the server action knows which product */}
+      <input type="hidden" name="productId" value={productId} />
       <h2 className="text-lg font-semibold text-gray-900">Add Maker</h2>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="grid grid-cols-2 gap-4">

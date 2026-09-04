@@ -4,10 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { saveStoryAction } from "@/lib/stories/actions";
 
 interface StoryFormProps {
   productId: string;
-  action: (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
   initial?: {
     inspiration: string;
     crafting_process: string;
@@ -15,7 +15,7 @@ interface StoryFormProps {
   };
 }
 
-export function StoryFormClient({ action, initial }: StoryFormProps) {
+export function StoryFormClient({ productId, initial }: StoryFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -23,7 +23,7 @@ export function StoryFormClient({ action, initial }: StoryFormProps) {
   async function handleAction(formData: FormData) {
     setError(null);
     setSuccess(false);
-    const result = await action(formData);
+    const result = await saveStoryAction(formData);
     if (result.ok) {
       setSuccess(true);
       router.refresh();
@@ -39,6 +39,9 @@ export function StoryFormClient({ action, initial }: StoryFormProps) {
   return (
     <form action={handleAction} className="space-y-6">
       {error && <Alert variant="error">{error}</Alert>}
+
+      {/* Hidden field so the server action knows which product */}
+      <input type="hidden" name="productId" value={productId} />
 
       <div>
         <label htmlFor="inspiration" className="mb-1.5 block text-sm font-medium text-gray-700">

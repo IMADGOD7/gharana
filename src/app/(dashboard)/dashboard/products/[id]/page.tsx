@@ -1,6 +1,8 @@
 import { getProduct } from "@/lib/products/actions";
+import { getProductMedia, getMediaSignedUrl } from "@/lib/media/actions";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { MediaGallery, type MediaItem } from "@/components/products/media-gallery";
 import type { ProductWithRelations } from "@/lib/products/actions";
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -13,6 +15,19 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
   const story = (product as ProductWithRelations).product_stories;
   const makers = (product as ProductWithRelations).makers;
+
+  // Fetch media with signed URLs for display
+  const rawMedia = await getProductMedia(id);
+  const media: MediaItem[] = await Promise.all(
+    rawMedia.map(async (m) => {
+      try {
+        const signedUrl = await getMediaSignedUrl(m.storage_path, m.media_type);
+        return { ...m, signed_url: signedUrl };
+      } catch {
+        return { ...m, signed_url: undefined };
+      }
+    })
+  );
 
   return (
     <div>
@@ -81,7 +96,19 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             >
               Makers {makers?.length ? `(${makers.length})` : "(add)"}
             </Link>
+            <Link
+              href={`/dashboard/shops`}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Shop
+            </Link>
           </nav>
+
+          <MediaGallery
+            productId={id}
+            initialMedia={media}
+            isDraft={product.status === "draft"}
+          />
         </div>
 
         <div className="space-y-6">

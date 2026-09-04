@@ -1,13 +1,46 @@
-import { getProducts } from "@/lib/products/actions";
+import { getPartnerProductsFiltered } from "@/lib/products/actions";
 import Link from "next/link";
 import { SubmitProductButton } from "@/components/products/submit-product-button";
 import type { ProductRow } from "@/lib/products/actions";
 
-export default async function ProductsPage() {
-  const products: ProductRow[] = await getProducts();
+const STATUS_TABS = [
+  { key: "all", label: "All" },
+  { key: "draft", label: "Drafts" },
+  { key: "submitted", label: "Submitted" },
+  { key: "changes_requested", label: "Changes Requested" },
+  { key: "approved", label: "Approved" },
+  { key: "rejected", label: "Rejected" },
+];
 
-  const drafts = products.filter((p) => p.status === "draft");
-  const submitted = products.filter((p) => p.status !== "draft");
+function resolveSearchParams(
+  searchParams: Promise<Record<string, string | undefined>>
+): Promise<{ status: string; search: string }> {
+  return searchParams.then(
+    (params) => ({
+      status: params?.status || "all",
+      search: params?.search || "",
+    })
+  );
+}
+
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const { status, search } = await resolveSearchParams(searchParams);
+
+  const products: ProductRow[] = await getPartnerProductsFiltered({ status, search });
+
+  const counts: Record<string, number> = {};
+  STATUS_TABS.forEach((t) => {
+    counts[t.key] = 0;
+  });
+  products.forEach((p) => {
+    const key = p.status;
+    counts[key] = (counts[key] || 0) + 1;
+    counts["all"] = (counts["all"] || 0) + 1;
+  });
 
   return (
     <div>
@@ -15,7 +48,7 @@ export default async function ProductsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Products</h1>
           <p className="mt-1 text-gray-500">
-            {drafts.length} draft{drafts.length !== 1 ? "s" : ""}, {submitted.length} submitted
+            Manage your product catalog
           </p>
         </div>
         <Link
@@ -26,14 +59,64 @@ export default async function ProductsPage() {
         </Link>
       </div>
 
-      <div className="mt-8 space-y-4">
+      {/* Search */}
+      <form method="GET" className="mt-6">
+        <input type="hidden" name="status" value={status} />
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            name="search"
+            defaultValue={search}
+            placeholder="Search products..."
+            className="w-full max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200"
+          >
+            Search
+          </button>
+          {(status !== "all" || search) && (
+            <Link href="/dashboard/products" className="text-sm text-blue-600 hover:underline">
+              Clear filters
+            </Link>
+          )}
+        </div>
+      </form>
+
+      {/* Status tabs */}
+      <div className="mt-6 flex gap-1 overflow-x-auto border-b border-gray-200">
+        {STATUS_TABS.map((tab) => (
+          <Link
+            key={tab.key}
+            href={
+              tab.key === "all"
+                ? "/dashboard/products"
+                : `/dashboard/products?status=${tab.key}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+            }
+            className={`whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 ${
+              status === tab.key
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {tab.label}
+            {(counts[tab.key] || 0) > 0 && (
+              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
+                status === tab.key ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
+              }`}>
+                {counts[tab.key]}
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
+
+      <div className="mt-6 space-y-4">
         {products.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 p-12 text-center">
-            <p className="text-gray-500">No products yet</p>
-            <Link
-              href="/dashboard/products/new"
-              className="mt-4 inline-block text-sm text-blue-600 hover:underline"
-            >
+            <p className="text-gray-500">No products match your filters.</p>
+            <Link href="/dashboard/products/new" className="mt-4 inline-block text-sm text-blue-600 hover:underline">
               Create your first product
             </Link>
           </div>
@@ -92,7 +175,6 @@ function StatusBadge({ status }: { status: string }) {
     approved: "bg-green-100 text-green-700",
     rejected: "bg-red-100 text-red-700",
   };
-
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors[status] || "bg-gray-100"}`}>
       {status.replace("_", " ")}

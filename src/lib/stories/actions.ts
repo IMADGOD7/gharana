@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth/session";
+import { getOrCreatePartnerProfile } from "@/lib/products/actions";
 
 export async function getProductStory(productId: string) {
   const profile = await requireAuth();
@@ -21,11 +22,7 @@ export async function getProductStory(productId: string) {
 
     if (!product) return null;
 
-    const { data: partnerProfile } = await supabase
-      .from("partner_profiles")
-      .select("id")
-      .eq("user_id", profile.id)
-      .single<{ id: string }>();
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
 
     if (!partnerProfile || product.partner_id !== partnerProfile.id) {
       return null;
@@ -56,11 +53,7 @@ export async function upsertProductStory(productId: string, formData: FormData) 
       return { ok: false as const, error: "Product not found" };
     }
 
-    const { data: partnerProfile } = await supabase
-      .from("partner_profiles")
-      .select("id")
-      .eq("user_id", profile.id)
-      .single<{ id: string }>();
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
 
     if (!partnerProfile || product.partner_id !== partnerProfile.id) {
       return { ok: false as const, error: "Not authorized" };
@@ -103,4 +96,16 @@ export async function upsertProductStory(productId: string, formData: FormData) 
   revalidatePath(`/dashboard/products/${productId}`);
   revalidatePath(`/dashboard/products/${productId}/story`);
   return { ok: true as const };
+}
+
+// ============================================================
+// Client-callable wrapper — reads productId from FormData
+// so the client component doesn't need a curried server action prop.
+// ============================================================
+export async function saveStoryAction(formData: FormData) {
+  const productId = String(formData.get("productId") || "");
+  if (!productId) {
+    return { ok: false as const, error: "Missing product ID" };
+  }
+  return upsertProductStory(productId, formData);
 }

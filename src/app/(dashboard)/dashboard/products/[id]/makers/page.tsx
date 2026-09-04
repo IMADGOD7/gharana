@@ -1,4 +1,4 @@
-import { getMakers, createMaker } from "@/lib/makers/actions";
+import { getMakers } from "@/lib/makers/actions";
 import { getProduct } from "@/lib/products/actions";
 import { notFound } from "next/navigation";
 import { MakerFormClient } from "@/components/products/maker-form";
@@ -12,15 +12,13 @@ export default async function MakersPage({ params }: { params: Promise<{ id: str
     notFound();
   }
 
-  const addMaker = async (formData: FormData) => createMaker(id, formData);
-
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">Makers</h1>
       <p className="mt-1 text-gray-500">Add artisan information for {product.title}</p>
 
       <div className="mt-8 space-y-8">
-        <MakerFormClient _productId={id} action={addMaker} />
+        <MakerFormClient productId={id} />
 
         {makers.length > 0 && (
           <div>

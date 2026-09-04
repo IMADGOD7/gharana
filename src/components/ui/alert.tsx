@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 interface AlertProps {
   children: ReactNode;
   variant?: "success" | "error" | "warning" | "info";
+  className?: string;
 }
 
 const styles = {

@@ -1,4 +1,4 @@
-import { getProductStory, upsertProductStory } from "@/lib/stories/actions";
+import { getProductStory } from "@/lib/stories/actions";
 import { getProduct } from "@/lib/products/actions";
 import { notFound } from "next/navigation";
 import { StoryFormClient } from "@/components/products/story-form";
@@ -12,9 +12,6 @@ export default async function ProductStoryPage({ params }: { params: Promise<{ i
     notFound();
   }
 
-  // Curried server action — client form will call this as its action
-  const saveStory = async (formData: FormData) => upsertProductStory(id, formData);
-
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">Product Story</h1>
@@ -22,7 +19,7 @@ export default async function ProductStoryPage({ params }: { params: Promise<{ i
         Tell the story behind {product.title}
       </p>
       <div className="mt-8 max-w-2xl">
-        <StoryFormClient productId={id} action={saveStory} initial={story} />
+        <StoryFormClient productId={id} initial={story} />
       </div>
     </div>
   );

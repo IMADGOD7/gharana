@@ -75,6 +75,19 @@ export async function reviewProduct(
   return { ok: true as const };
 }
 
+// ============================================================
+// Client-boundable wrapper — accepts productId from the client
+// ============================================================
+export async function submitReviewAction(formData: FormData) {
+  const productId = String(formData.get("productId") || "");
+  if (!productId) {
+    return { ok: false as const, error: "Missing product ID" };
+  }
+  const decision = String(formData.get("decision") || "") as "approve" | "reject" | "request_changes";
+  const notes = String(formData.get("notes") || "");
+  return reviewProduct(productId, decision, notes);
+}
+
 export async function getAllPartners() {
   await requireAdmin();
   const supabase = await createServerClient();
@@ -123,4 +136,40 @@ export async function getAdminProduct(productId: string) {
     .single();
 
   return data;
+}
+
+// ============================================================
+// Search & filter for admin product list
+// ============================================================
+export async function getAdminProductsFiltered(options: {
+  status?: string;
+  search?: string;
+}) {
+  await requireAdmin();
+  const supabase = await createServerClient();
+
+  let query = supabase
+    .from("products")
+    .select("*, partner_profiles(brand_name), profiles(full_name)")
+    .order("created_at", { ascending: false });
+
+  if (options.status && options.status !== "all") {
+    query = query.eq("status", options.status);
+  }
+
+  if (options.search) {
+    query = query.or(`title.ilike.%${options.search}%,description.ilike.%${options.search}%`);
+  }
+
+  const { data } = await query;
+
+  return (data ?? []) as Array<{
+    id: string;
+    title: string;
+    status: string;
+    partner_id: string;
+    partner_profiles: { brand_name: string } | null;
+    profiles: { full_name: string } | null;
+    created_at: string;
+  }>;
 }

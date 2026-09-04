@@ -3,6 +3,9 @@
 // For use in Server Components, Server Actions, Route Handlers
 // Uses @supabase/ssr with Next.js cookies()
 // ============================================================
+// Note: cookies() is read-only in Server Components but
+// writable in Route Handlers and Server Actions. The
+// setAll callback only fires in contexts where it's allowed.
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -24,8 +27,8 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             );
           } catch {
-            // Server Component — can't set cookies directly.
-            // This is expected and handled by the middleware.
+            // Read-only context (Server Component) — cookies
+            // will be set by the middleware or Route Handler.
           }
         },
       },

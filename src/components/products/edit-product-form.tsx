@@ -74,7 +74,7 @@ export function EditProductForm({ product }: EditProductFormProps) {
             {error}
           </div>
         )}
-        <ProductForm action={handleAction} initial={initial} submitLabel="Save changes" />
+        <ProductForm mode="edit" productId={product.id} initial={initial} submitLabel="Save changes" />
       </div>
     </div>
   );

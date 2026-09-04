@@ -84,7 +84,17 @@ export async function getProducts(): Promise<ProductRow[]> {
     .eq("user_id", profile.id)
     .single<{ id: string }>();
 
-  if (!partnerProfile) return [];
+  if (!partnerProfile) {
+    const autoProfile = await getOrCreatePartnerProfile(supabase, profile.id);
+    if (!autoProfile) return [];
+    // Use autoProfile.id for the products query
+    const { data } = await supabase
+      .from("products")
+      .select("*")
+      .eq("partner_id", autoProfile.id)
+      .order("created_at", { ascending: false });
+    return (data ?? []) as ProductRow[];
+  }
 
   const { data } = await supabase
     .from("products")
@@ -108,11 +118,7 @@ export async function getProduct(id: string): Promise<ProductWithRelations | nul
   if (error || !data) return null;
 
   if (profile.role !== "admin") {
-    const { data: partnerProfile } = await supabase
-      .from("partner_profiles")
-      .select("id")
-      .eq("user_id", profile.id)
-      .single<{ id: string }>();
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
 
     if (!partnerProfile || data.partner_id !== partnerProfile.id) {
       return null;
@@ -162,14 +168,11 @@ export async function createProduct(formData: FormData): Promise<{ ok: true; dat
   const profile = await requireAuth();
   const supabase = await createServerClient();
 
-  const { data: partnerProfile } = await supabase
-    .from("partner_profiles")
-    .select("id")
-    .eq("user_id", profile.id)
-    .single<{ id: string }>();
+  // Get or create the partner profile (handles existing users who signed up before the callback fix)
+  let partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
 
   if (!partnerProfile) {
-    return { ok: false, error: "No partner profile found. Complete onboarding first." };
+    return { ok: false, error: "Failed to set up partner profile. Please contact support." };
   }
 
   const title = String(formData.get("title") || "").trim();
@@ -233,11 +236,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<{ o
   }
 
   if (profile.role !== "admin") {
-    const { data: partnerProfile } = await supabase
-      .from("partner_profiles")
-      .select("id")
-      .eq("user_id", profile.id)
-      .single<{ id: string }>();
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
 
     if (!partnerProfile || product.partner_id !== partnerProfile.id) {
       return { ok: false, error: "Not authorized" };
@@ -305,11 +304,7 @@ export async function submitProduct(id: string): Promise<{ ok: true } | { ok: fa
   }
 
   if (profile.role !== "admin") {
-    const { data: partnerProfile } = await supabase
-      .from("partner_profiles")
-      .select("id")
-      .eq("user_id", profile.id)
-      .single<{ id: string }>();
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
 
     if (!partnerProfile || product.partner_id !== partnerProfile.id) {
       return { ok: false, error: "Not authorized" };
@@ -395,4 +390,86 @@ export async function deleteProduct(id: string): Promise<{ ok: true } | { ok: fa
 
   revalidatePath("/dashboard/products");
   return { ok: true };
+}
+
+/**
+ * Get the partner profile for the given user, creating one if it doesn't exist.
+ * Self-healing helper for users who signed up before the auth-callback
+ * profile creation was added. Exported so other modules can reuse it.
+ */
+export async function getOrCreatePartnerProfile(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  userId: string
+): Promise<{ id: string } | null> {
+  const { data: existing } = await supabase
+    .from("partner_profiles")
+    .select("id")
+    .eq("user_id", userId)
+    .single<{ id: string }>();
+
+  if (existing) {
+    return existing;
+  }
+
+  const { data: created, error } = await supabase
+    .from("partner_profiles")
+    .insert({ user_id: userId, brand_name: "" })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !created) {
+    console.error("[getOrCreatePartnerProfile] Failed:", JSON.stringify(error));
+    console.error("[getOrCreatePartnerProfile] User ID:", userId);
+    // Try to determine if it's a FK constraint issue
+    const { data: profileCheck } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", userId)
+      .single();
+    console.error("[getOrCreatePartnerProfile] Profile exists?", !!profileCheck);
+    return null;
+  }
+
+  return created;
+}
+// ============================================================
+// Search & filter for partner product list
+// ============================================================
+export async function getPartnerProductsFiltered(options: {
+  status?: string;
+  search?: string;
+}) {
+  const profile = await requireAuth();
+  const supabase = await createServerClient();
+
+  const { data: partnerProfile } = await supabase
+    .from("partner_profiles")
+    .select("id")
+    .eq("user_id", profile.id)
+    .single<{ id: string }>();
+
+  if (!partnerProfile) {
+    const autoProfile = await getOrCreatePartnerProfile(supabase, profile.id);
+    if (!autoProfile) return [];
+  }
+
+  const partnerId = partnerProfile?.id;
+  if (!partnerId) return [];
+
+  let query = supabase
+    .from("products")
+    .select("*")
+    .eq("partner_id", partnerId)
+    .order("created_at", { ascending: false });
+
+  if (options.status && options.status !== "all") {
+    query = query.eq("status", options.status);
+  }
+
+  if (options.search) {
+    query = query.or(`title.ilike.%${options.search}%,description.ilike.%${options.search}%`);
+  }
+
+  const { data } = await query;
+  return (data ?? []) as ProductRow[];
 }

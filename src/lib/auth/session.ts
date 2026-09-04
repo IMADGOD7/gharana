@@ -44,8 +44,51 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
     .select("*")
     .eq("id", user.id)
     .single<Profile>();
-  console.log("[DEBUG] getProfile: query result:", data, "error:", error);
-  return data ?? null;
+
+  // If no profile row exists, try to create one (self-healing for legacy accounts)
+  if (error || !data) {
+    console.log("[DEBUG] getProfile: no profile row, attempting self-healing for user:", user.id);
+    console.log("[DEBUG] getProfile: auth.uid():", user.id, "email:", user.email);
+    try {
+      const { data: created, error: createError } = await supabase
+        .from("profiles")
+        .insert({
+          id: user.id,
+          email: user.email ?? "",
+          full_name: user.user_metadata?.full_name ?? "",
+          role: "partner",
+        })
+        .select("*")
+        .single<Profile>();
+
+      if (createError) {
+        console.error("[DEBUG] getProfile: self-healing profiles insert failed:", JSON.stringify(createError));
+        return null;
+      }
+
+      // Also create the partner profile
+      const { data: ppCreated, error: ppError } = await supabase
+        .from("partner_profiles")
+        .insert({ user_id: user.id, brand_name: "" })
+        .select("id")
+        .single<{ id: string }>();
+
+      if (ppError) {
+        console.error("[DEBUG] getProfile: partner_profiles insert failed:", JSON.stringify(ppError));
+      } else {
+        console.log("[DEBUG] getProfile: partner_profiles created:", ppCreated?.id);
+      }
+
+      console.log("[DEBUG] getProfile: self-healing succeeded, profile id:", created.id);
+      return created;
+    } catch (e) {
+      console.error("[DEBUG] getProfile: self-healing exception:", e);
+      return null;
+    }
+  }
+
+  console.log("[DEBUG] getProfile: query result:", data);
+  return data;
 });
 
 export async function requireAuth() {
