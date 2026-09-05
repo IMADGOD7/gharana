@@ -341,11 +341,10 @@ export async function submitProduct(id: string): Promise<{ ok: true } | { ok: fa
 
   await supabase.from("submission_history").insert({
     product_id: id,
-    action: "approve",
+    action: "submit",
     from_status: "draft",
     to_status: "submitted",
     notes: "Product submitted for review",
-    reviewed_by: profile.id,
   });
 
   revalidatePath(`/dashboard/products/${id}`);
@@ -418,15 +417,12 @@ export async function getOrCreatePartnerProfile(
     .single<{ id: string }>();
 
   if (error || !created) {
-    console.error("[getOrCreatePartnerProfile] Failed:", JSON.stringify(error));
-    console.error("[getOrCreatePartnerProfile] User ID:", userId);
     // Try to determine if it's a FK constraint issue
     const { data: profileCheck } = await supabase
       .from("profiles")
       .select("id")
       .eq("id", userId)
       .single();
-    console.error("[getOrCreatePartnerProfile] Profile exists?", !!profileCheck);
     return null;
   }
 

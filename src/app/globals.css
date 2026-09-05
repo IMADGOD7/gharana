@@ -1,21 +1,98 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #ffffff;
-  --color-foreground: #171717;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: #fafafa;
+  --color-foreground: #111827;
+  --color-brand: #2563eb;
+  --color-brand-hover: #1d4ed8;
+  --color-brand-subtle: #eff6ff;
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #0a0a0a;
-    --color-foreground: #ededed;
-  }
+/* Design System — Utility Classes (Tailwind @apply compatible) */
+@layer utilities {
+  /* Brand */
+  .bg-brand { background-color: #2563eb; }
+  .text-brand { color: #2563eb; }
+
+  /* Status Colors */
+  .bg-status-draft { background-color: #fef3c7; }
+  .text-status-draft { color: #92400e; }
+  .bg-status-submitted { background-color: #dbeafe; }
+  .text-status-submitted { color: #1e40af; }
+  .bg-status-changes { background-color: #fee2e2; }
+  .text-status-changes { color: #991b1b; }
+  .bg-status-approved { background-color: #d1fae5; }
+  .text-status-approved { color: #065f46; }
+  .bg-status-rejected { background-color: #f3f4f6; }
+  .text-status-rejected { color: #374151; }
 }
 
+/* Design System — Component Classes (plain CSS) */
+.input-focus {
+  width: 100%;
+  border-radius: 0.5rem;
+  border-width: 1px;
+  border-color: #d1d5db;
+  background-color: #ffffff;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #111827;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.input-focus::placeholder { color: #9ca3af; }
+.input-focus:focus {
+  border-color: #2563eb;
+  outline: 2px solid #2563eb;
+  outline-offset: -1px;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  background-color: #2563eb;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-primary:hover:not(:disabled) { background-color: #1d4ed8; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  border-width: 1px;
+  border-color: #d1d5db;
+  background-color: #ffffff;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: #374151;
+  cursor: pointer;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-secondary:hover { background-color: #f9fafb; }
+
+/* Base */
 body {
   color: var(--color-foreground);
   background: var(--color-background);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

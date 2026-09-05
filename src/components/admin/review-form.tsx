@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { submitReviewAction } from "@/lib/admin/actions";
@@ -99,7 +100,7 @@ export function ReviewFormClient({ productId }: ReviewFormProps) {
           name="notes"
           rows={4}
           required
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className={cn("input-focus", "w-full")}
           placeholder="Add feedback for the partner..."
         />
       </div>

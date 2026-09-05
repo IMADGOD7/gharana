@@ -27,17 +27,14 @@ export const getSession = cache(async () => {
 export const getUser = cache(async () => {
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  console.log("[DEBUG] getUser result:", user ? { id: user.id, email: user.email } : null);
   return user ?? null;
 });
 
 export const getProfile = cache(async (): Promise<Profile | null> => {
   const user = await getUser();
   if (!user) {
-    console.log("[DEBUG] getProfile: no user from getUser()");
-    return null;
+      return null;
   }
-  console.log("[DEBUG] getProfile: user found, querying profiles table for id:", user.id);
   const supabase = await createServerClient();
   const { data, error } = await supabase
     .from("profiles")
@@ -47,9 +44,7 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
 
   // If no profile row exists, try to create one (self-healing for legacy accounts)
   if (error || !data) {
-    console.log("[DEBUG] getProfile: no profile row, attempting self-healing for user:", user.id);
-    console.log("[DEBUG] getProfile: auth.uid():", user.id, "email:", user.email);
-    try {
+        try {
       const { data: created, error: createError } = await supabase
         .from("profiles")
         .insert({
@@ -62,8 +57,7 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
         .single<Profile>();
 
       if (createError) {
-        console.error("[DEBUG] getProfile: self-healing profiles insert failed:", JSON.stringify(createError));
-        return null;
+            return null;
       }
 
       // Also create the partner profile
@@ -74,20 +68,15 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
         .single<{ id: string }>();
 
       if (ppError) {
-        console.error("[DEBUG] getProfile: partner_profiles insert failed:", JSON.stringify(ppError));
-      } else {
-        console.log("[DEBUG] getProfile: partner_profiles created:", ppCreated?.id);
-      }
+          } else {
+          }
 
-      console.log("[DEBUG] getProfile: self-healing succeeded, profile id:", created.id);
-      return created;
+          return created;
     } catch (e) {
-      console.error("[DEBUG] getProfile: self-healing exception:", e);
-      return null;
+          return null;
     }
   }
 
-  console.log("[DEBUG] getProfile: query result:", data);
   return data;
 });
 

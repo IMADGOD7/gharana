@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { addMakerAction } from "@/lib/makers/actions";
 
@@ -46,7 +47,7 @@ export function MakerFormClient({ productId }: MakerFormProps) {
             id="name"
             name="name"
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className={cn("input-focus", "w-full")}
           />
         </div>
         <div>
@@ -57,7 +58,7 @@ export function MakerFormClient({ productId }: MakerFormProps) {
             id="craft_technique"
             name="craft_technique"
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className={cn("input-focus", "w-full")}
           />
         </div>
       </div>
@@ -69,7 +70,7 @@ export function MakerFormClient({ productId }: MakerFormProps) {
           id="bio"
           name="bio"
           rows={3}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          className={cn("input-focus", "w-full")}
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -82,7 +83,7 @@ export function MakerFormClient({ productId }: MakerFormProps) {
             name="years_of_experience"
             type="number"
             min="0"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className={cn("input-focus", "w-full")}
           />
         </div>
         <div>
@@ -92,7 +93,7 @@ export function MakerFormClient({ productId }: MakerFormProps) {
           <input
             id="location"
             name="location"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className={cn("input-focus", "w-full")}
           />
         </div>
       </div>

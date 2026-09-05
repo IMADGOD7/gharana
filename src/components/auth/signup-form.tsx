@@ -56,13 +56,13 @@ export function SignupForm() {
 
   if (sent) {
     return (
-      <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-6 text-center">
-        <p className="text-sm font-medium text-green-800">Check your email</p>
-        <p className="mt-1 text-sm text-green-600">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-6 text-center">
+        <p className="text-sm font-medium text-emerald-800">Check your email</p>
+        <p className="mt-1 text-sm text-emerald-600">
           We sent you a confirmation link. Click it to activate your account.
         </p>
         <p className="mt-3 text-sm">
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link href="/login" className="text-brand hover:underline">
             Back to login
           </Link>
         </p>
@@ -89,7 +89,7 @@ export function SignupForm() {
           onChange={(e) => setFullName(e.target.value)}
           required
           autoComplete="name"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="input-focus"
           placeholder="Your full name"
           suppressHydrationWarning
         />
@@ -106,7 +106,7 @@ export function SignupForm() {
           onChange={(e) => setEmail(e.target.value)}
           required
           autoComplete="email"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="input-focus"
           placeholder="you@example.com"
           suppressHydrationWarning
         />
@@ -124,7 +124,7 @@ export function SignupForm() {
           required
           minLength={8}
           autoComplete="new-password"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="input-focus"
           placeholder="At least 8 characters"
           suppressHydrationWarning
         />
@@ -133,7 +133,7 @@ export function SignupForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        className="btn-primary w-full"
         suppressHydrationWarning
       >
         {loading ? "Creating account..." : "Create account"}

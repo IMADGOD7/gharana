@@ -70,11 +70,9 @@ export async function signIn(
   });
 
   if (error) {
-    console.log("[DEBUG] signIn error:", error.message);
-    return { ok: false, error: "Invalid email or password" };
+      return { ok: false, error: "Invalid email or password" };
   }
 
-  console.log("[DEBUG] signIn success — auth cookies set by supabase client");
   return { ok: true, message: "Signed in" };
 }
 

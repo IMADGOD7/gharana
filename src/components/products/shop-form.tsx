@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { upsertShop } from "@/lib/shops/actions";
@@ -60,7 +61,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
           type="text"
           required
           defaultValue={toDate(initial?.name)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className={cn("input-focus", "w-full")}
           placeholder="e.g. Gharana Crafts"
         />
       </div>
@@ -74,7 +75,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
           name="description"
           rows={3}
           defaultValue={toDate(initial?.description)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className={cn("input-focus", "w-full")}
           placeholder="Brief description of your shop or brand"
         />
       </div>
@@ -89,7 +90,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
             name="address"
             type="text"
             defaultValue={toDate(initial?.address)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className={cn("input-focus", "w-full")}
             placeholder="Street address"
           />
         </div>
@@ -102,7 +103,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
             name="city"
             type="text"
             defaultValue={toDate(initial?.city)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className={cn("input-focus", "w-full")}
             placeholder="City"
           />
         </div>
@@ -118,7 +119,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
             name="state"
             type="text"
             defaultValue={toDate(initial?.state)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className={cn("input-focus", "w-full")}
             placeholder="State"
           />
         </div>
@@ -131,7 +132,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
             name="country"
             type="text"
             defaultValue={initial?.country ?? "India"}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className={cn("input-focus", "w-full")}
             placeholder="Country"
           />
         </div>
@@ -147,7 +148,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
             name="phone"
             type="tel"
             defaultValue={toDate(initial?.phone)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className={cn("input-focus", "w-full")}
             placeholder="+91 98765 43210"
           />
         </div>
@@ -160,7 +161,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
             name="email"
             type="email"
             defaultValue={toDate(initial?.email)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className={cn("input-focus", "w-full")}
             placeholder="shop@example.com"
           />
         </div>
@@ -176,7 +177,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
             name="website"
             type="url"
             defaultValue={toDate(initial?.website)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className={cn("input-focus", "w-full")}
             placeholder="https://example.com"
           />
         </div>
@@ -191,7 +192,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
             min="1800"
             max={new Date().getFullYear()}
             defaultValue={initial?.established_year ?? ""}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className={cn("input-focus", "w-full")}
             placeholder="2020"
           />
         </div>

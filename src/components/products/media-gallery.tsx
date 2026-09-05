@@ -10,6 +10,7 @@ import { uploadMedia, deleteMedia, setPrimaryMedia } from "@/lib/media/actions";
 
 export interface MediaItem extends MediaAssetRow {
   signed_url?: string;
+  _error?: boolean;
 }
 
 interface MediaGalleryProps {
@@ -163,7 +164,12 @@ export function MediaGallery({ productId, initialMedia, isDraft }: MediaGalleryP
                 />
               ) : (
                 <div className="aspect-square flex items-center justify-center bg-gray-100">
-                  <span className="text-xs text-gray-400">No preview</span>
+                  <div className="text-center">
+                    <span className="text-xs text-gray-400 block">No preview</span>
+                    {item._error && (
+                      <span className="text-xs text-red-400 block mt-1">(preview error — check console)</span>
+                    )}
+                  </div>
                 </div>
               )}
 

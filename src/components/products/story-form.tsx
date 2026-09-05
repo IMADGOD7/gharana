@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { saveStoryAction } from "@/lib/stories/actions";
@@ -53,7 +54,7 @@ export function StoryFormClient({ productId, initial }: StoryFormProps) {
           rows={4}
           required
           defaultValue={initial?.inspiration}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className={cn("input-focus", "w-full")}
           placeholder="What inspired this piece?"
         />
       </div>
@@ -68,7 +69,7 @@ export function StoryFormClient({ productId, initial }: StoryFormProps) {
           rows={6}
           required
           defaultValue={initial?.crafting_process}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className={cn("input-focus", "w-full")}
           placeholder="Describe how this product is made..."
         />
       </div>
@@ -82,7 +83,7 @@ export function StoryFormClient({ productId, initial }: StoryFormProps) {
           name="cultural_context"
           rows={3}
           defaultValue={initial?.cultural_context ?? ""}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className={cn("input-focus", "w-full")}
           placeholder="Any cultural or historical significance..."
         />
       </div>

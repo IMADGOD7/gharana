@@ -12,22 +12,13 @@ export async function GET(request: NextRequest) {
   const errorParam = request.nextUrl.searchParams.get("error");
   const origin = request.nextUrl.origin;
 
-  console.log("[auth/callback] Request:", {
-    url: request.url,
-    hasCode: !!code,
-    error: errorParam,
-    cookies: request.cookies.getAll().map(c => c.name),
-  });
-
   if (errorParam) {
-    console.error("[auth/callback] URL error:", errorParam, request.nextUrl.searchParams.get("error_description"));
     return NextResponse.redirect(
       `${origin}/auth/error?message=${encodeURIComponent(errorParam)}`
     );
   }
 
   if (!code) {
-    console.error("[auth/callback] No code found");
     return NextResponse.redirect(`${origin}/auth/error?message=no_code`);
   }
 
@@ -37,22 +28,12 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-    console.log("[auth/callback] Exchange result:", {
-      hasSession: !!data?.session,
-      hasUser: !!data?.user,
-      userId: data?.user?.id,
-      error: error?.message,
-    });
-
     if (!error && data.session) {
-      console.log("[auth/callback] SUCCESS — redirecting to:", next);
       return NextResponse.redirect(`${origin}${next}`);
     }
 
-    console.error("[auth/callback] exchangeCodeForSession error:", error?.message);
-
-  } catch (e) {
-    console.error("[auth/callback] Exception:", e);
+  } catch {
+    // Silently fall through to error redirect
   }
 
   return NextResponse.redirect(`${origin}/auth/error?message=exchange_failed`);
