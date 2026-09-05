@@ -1,13 +1,14 @@
-import { getAdminProduct } from "@/lib/admin/actions";
+import { getAdminProduct, getSubmissionHistory } from "@/lib/admin/actions";
 import { notFound } from "next/navigation";
 import { ReviewFormClient } from "@/components/admin/review-form";
 import { SubmissionTimeline } from "@/components/shared/submission-timeline";
-import { cn } from "@/lib/utils";
-import { Package, Calendar, User, FileText, Users, Eye } from "lucide-react";
 
 export default async function AdminProductReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const product = await getAdminProduct(id);
+  const [product, history] = await Promise.all([
+    getAdminProduct(id),
+    getSubmissionHistory(id),
+  ]);
 
   if (!product) {
     notFound();
@@ -92,7 +93,7 @@ export default async function AdminProductReviewPage({ params }: { params: Promi
           {/* Submission History */}
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Submission History</h2>
-            <SubmissionTimeline currentStatus={product.status} history={[]} />
+            <SubmissionTimeline history={history} />
           </section>
         </div>
 

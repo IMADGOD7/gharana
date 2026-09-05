@@ -3,7 +3,6 @@ import { getAllProductsForAdmin } from "@/lib/admin/actions";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
-  ShieldCheck,
   Package,
   Users,
   FileText,
@@ -136,7 +135,6 @@ function StatCard({
   };
 
   const c = config[color];
-  const Icon = c.icon;
 
   return (
     <div className={cn("rounded-xl border p-4 ring-8", c.bg, c.ring)}>

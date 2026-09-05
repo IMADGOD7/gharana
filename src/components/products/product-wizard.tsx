@@ -9,7 +9,7 @@ import {
   FileText,
   Feather,
   Users,
-  Image,
+  Image as ImageLucide,
   Send,
   Save,
   Loader2,
@@ -215,7 +215,7 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
               </p>
             </div>
             <div className="rounded-xl border-2 border-dashed border-gray-300 p-8 text-center">
-              <Image className="mx-auto h-10 w-10 text-gray-400 mb-3" />
+              <ImageLucide className="mx-auto h-10 w-10 text-gray-400 mb-3" />
               <p className="text-sm font-medium text-gray-700">Photos and videos</p>
               <p className="text-xs text-gray-400 mt-1">
                 Once your product is created, you&apos;ll be able to upload photos (up to 10MB) and videos (up to 100MB) from the product page.
@@ -582,26 +582,6 @@ function MakerStep({
             placeholder="Tell the artisan's story — their journey, tradition, and passion..."
           />
         </FieldWrapper>
-      </div>
-    </div>
-  );
-}
-
-function MediaStep() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900">Media Gallery</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Upload photos and videos after creating your product.
-        </p>
-      </div>
-      <div className="rounded-xl border-2 border-dashed border-gray-300 p-8 text-center">
-        <Image className="mx-auto h-10 w-10 text-gray-400 mb-3" />
-        <p className="text-sm font-medium text-gray-700">Photos and videos</p>
-        <p className="text-xs text-gray-400 mt-1">
-          Once your product is created, you&apos;ll be able to upload photos (up to 10MB) and videos (up to 100MB) from the product page.
-        </p>
       </div>
     </div>
   );

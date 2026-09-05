@@ -1,14 +1,13 @@
-import { getProduct } from "@/lib/products/actions";
+import { getProduct, getSubmissionHistory } from "@/lib/products/actions";
 import { getProductMedia, getMediaSignedUrl } from "@/lib/media/actions";
 import { notFound } from "next/navigation";
 import { MediaGallery, type MediaItem } from "@/components/products/media-gallery";
-import { cn } from "@/lib/utils";
+import { SubmissionTimeline } from "@/components/shared/submission-timeline";
 import Link from "next/link";
 import {
   AlertTriangle,
   FileText,
   Users,
-  Image,
   Edit3,
   Calendar,
   Tag,
@@ -26,6 +25,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
   const story = (product as ProductWithRelations).product_stories;
   const makers = (product as ProductWithRelations).makers;
+  const submissionHistory = await getSubmissionHistory(id);
 
   const rawMedia = await getProductMedia(id);
   const media: MediaItem[] = await Promise.all(
@@ -209,6 +209,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 </div>
               )}
             </div>
+          </section>
+
+          {/* Submission History */}
+          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">Review History</h3>
+            <SubmissionTimeline history={submissionHistory} />
           </section>
         </div>
       </div>

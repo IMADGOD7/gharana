@@ -179,7 +179,7 @@ function BrandTab({ onSuccess, onError }: {
   onSuccess: (msg: string) => void;
   onError: (err: string) => void;
 }) {
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit(_formData: FormData) {
     onError("");
     // TODO: Implement brand profile update server action
     onSuccess("Brand profile updated successfully");

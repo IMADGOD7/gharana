@@ -61,7 +61,7 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
       }
 
       // Also create the partner profile
-      const { data: ppCreated, error: ppError } = await supabase
+      const { error: ppError } = await supabase
         .from("partner_profiles")
         .insert({ user_id: user.id, brand_name: "" })
         .select("id")
@@ -72,7 +72,7 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
           }
 
           return created;
-    } catch (e) {
+    } catch {
           return null;
     }
   }

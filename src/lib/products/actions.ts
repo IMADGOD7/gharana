@@ -128,6 +128,44 @@ export async function getProduct(id: string): Promise<ProductWithRelations | nul
   return data;
 }
 
+export async function getSubmissionHistory(productId: string) {
+  const profile = await requireAuth();
+  const supabase = await createServerClient();
+
+  // Verify product ownership (partner can only see their own, admin can see all)
+  const { data: product } = await supabase
+    .from("products")
+    .select("partner_id, status")
+    .eq("id", productId)
+    .single<ProductRow>();
+
+  if (!product) return [];
+
+  if (profile.role !== "admin") {
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
+    if (!partnerProfile || product.partner_id !== partnerProfile.id) {
+      return [];
+    }
+  }
+
+  // Fetch submission history — works for both draft (history empty) and submitted/approved/rejected
+  const { data } = await supabase
+    .from("submission_history")
+    .select("id, action, from_status, to_status, notes, reviewed_by, created_at")
+    .eq("product_id", productId)
+    .order("created_at", { ascending: true });
+
+  return (data ?? []) as Array<{
+    id: string;
+    action: string;
+    from_status: string | null;
+    to_status: string;
+    notes: string | null;
+    reviewed_by: string | null;
+    created_at: string;
+  }>;
+}
+
 export async function getDrafts(): Promise<ProductRow[]> {
   const profile = await requireAuth();
   const supabase = await createServerClient();
@@ -417,12 +455,6 @@ export async function getOrCreatePartnerProfile(
     .single<{ id: string }>();
 
   if (error || !created) {
-    // Try to determine if it's a FK constraint issue
-    const { data: profileCheck } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", userId)
-      .single();
     return null;
   }
 

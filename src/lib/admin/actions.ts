@@ -88,6 +88,27 @@ export async function submitReviewAction(formData: FormData) {
   return reviewProduct(productId, decision, notes);
 }
 
+export async function getSubmissionHistory(productId: string) {
+  await requireAdmin();
+  const supabase = await createServerClient();
+
+  const { data } = await supabase
+    .from("submission_history")
+    .select("id, action, from_status, to_status, notes, reviewed_by, created_at")
+    .eq("product_id", productId)
+    .order("created_at", { ascending: true });
+
+  return (data ?? []) as Array<{
+    id: string;
+    action: string;
+    from_status: string | null;
+    to_status: string;
+    notes: string | null;
+    reviewed_by: string | null;
+    created_at: string;
+  }>;
+}
+
 export async function getAllPartners() {
   await requireAdmin();
   const supabase = await createServerClient();

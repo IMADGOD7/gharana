@@ -1,7 +1,6 @@
 import { getProfile } from "@/lib/auth/session";
-import { getProduct } from "@/lib/products/actions";
 import { ProductWizard } from "@/components/products/product-wizard";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 
 export default async function NewProductPage() {
   const profile = await getProfile();

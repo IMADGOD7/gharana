@@ -1,7 +1,6 @@
 import { getPartnerShops } from "@/lib/shops/actions";
 import { ShopFormClient } from "@/components/products/shop-form";
-import { cn } from "@/lib/utils";
-import { Store, MapPin, Phone, Globe, Plus, Star } from "lucide-react";
+import { Store, MapPin, Phone, Globe, Star } from "lucide-react";
 
 export default async function ShopsPage() {
   const shops = await getPartnerShops();

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Send, RotateCcw, XCircle, Clock } from "lucide-react";
 
@@ -16,7 +15,6 @@ interface SubmissionHistoryEntry {
 
 interface SubmissionTimelineProps {
   history: SubmissionHistoryEntry[];
-  currentStatus: string;
 }
 
 const ACTION_CONFIG: Record<string, {
@@ -57,7 +55,7 @@ const ACTION_CONFIG: Record<string, {
   },
 };
 
-export function SubmissionTimeline({ history, currentStatus }: SubmissionTimelineProps) {
+export function SubmissionTimeline({ history }: SubmissionTimelineProps) {
   if (history.length === 0) {
     return (
       <div className="text-center py-8">

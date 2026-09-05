@@ -1,5 +1,4 @@
 import { getAllPartners } from "@/lib/admin/actions";
-import { cn } from "@/lib/utils";
 import { Users } from "lucide-react";
 
 export default async function AdminPartnersPage() {
