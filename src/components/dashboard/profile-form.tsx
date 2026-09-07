@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
-import { updateProfile } from "@/lib/auth/actions";
+import { updateProfile, updateBrandProfile } from "@/lib/auth/actions";
 import { cn } from "@/lib/utils";
-import { User, Store, Lock, Save, Loader2 } from "lucide-react";
+import { User, Store, Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type Tab = "personal" | "brand" | "security";
 
@@ -14,8 +15,19 @@ interface ProfileData {
   phone: string | null;
 }
 
+interface PartnerBrandProfile {
+  brand_name: string;
+  bio: string | null;
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  website: string | null;
+}
+
 interface ProfileFormProps {
   profile: ProfileData;
+  partnerProfile?: PartnerBrandProfile | null;
 }
 
 const TABS: { key: Tab; label: string; icon: typeof User }[] = [
@@ -24,7 +36,16 @@ const TABS: { key: Tab; label: string; icon: typeof User }[] = [
   { key: "security", label: "Security", icon: Lock },
 ];
 
-export function ProfileForm({ profile }: ProfileFormProps) {
+function SubmitButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending} {...props}>
+      {pending ? "Saving..." : children}
+    </Button>
+  );
+}
+
+export function ProfileForm({ profile, partnerProfile }: ProfileFormProps) {
   const [activeTab, setActiveTab] = useState<Tab>("personal");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,12 +99,12 @@ export function ProfileForm({ profile }: ProfileFormProps) {
 
       {/* Messages */}
       {message && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div role="status" aria-live="polite" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {message}
         </div>
       )}
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -94,7 +115,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           <PersonalTab profile={profile} onSuccess={(msg) => setMessage(msg)} onError={(err) => setError(err)} />
         )}
         {activeTab === "brand" && (
-          <BrandTab onSuccess={(msg) => setMessage(msg)} onError={(err) => setError(err)} />
+          <BrandTab
+            partnerProfile={partnerProfile}
+            onSuccess={(msg) => setMessage(msg)}
+            onError={(err) => setError(err)}
+          />
         )}
         {activeTab === "security" && <SecurityTab />}
       </div>
@@ -175,15 +200,30 @@ function PersonalTab({ profile, onSuccess, onError }: {
   );
 }
 
-function BrandTab({ onSuccess, onError }: {
+function BrandTab({ onSuccess, onError, partnerProfile }: {
   onSuccess: (msg: string) => void;
   onError: (err: string) => void;
+  partnerProfile?: PartnerBrandProfile | null;
 }) {
-  async function handleSubmit(_formData: FormData) {
+  async function handleSubmit(formData: FormData) {
     onError("");
-    // TODO: Implement brand profile update server action
-    onSuccess("Brand profile updated successfully");
+    const result = await updateBrandProfile(null, formData);
+    if (result.ok) {
+      onSuccess(result.message);
+    } else {
+      onError(result.error);
+    }
   }
+
+  const brand = partnerProfile ?? {
+    brand_name: "",
+    bio: null,
+    address_line1: null,
+    city: null,
+    state: null,
+    postal_code: null,
+    website: null,
+  };
 
   return (
     <div className="space-y-6">
@@ -201,6 +241,8 @@ function BrandTab({ onSuccess, onError }: {
             id="brand_name"
             name="brand_name"
             type="text"
+            defaultValue={brand.brand_name || ""}
+            suppressHydrationWarning
             className="input-focus"
             placeholder="Your brand or studio name"
           />
@@ -214,6 +256,8 @@ function BrandTab({ onSuccess, onError }: {
             id="brand_tagline"
             name="brand_tagline"
             type="text"
+            defaultValue={brand.bio || ""}
+            suppressHydrationWarning
             className="input-focus"
             placeholder="A short tagline for your brand"
           />
@@ -226,6 +270,8 @@ function BrandTab({ onSuccess, onError }: {
           <textarea
             id="brand_bio"
             name="brand_bio"
+            defaultValue={brand.bio || ""}
+            suppressHydrationWarning
             rows={4}
             className="input-focus resize-none"
             placeholder="Tell the story of your craft and workshop..."
@@ -241,6 +287,8 @@ function BrandTab({ onSuccess, onError }: {
               id="address"
               name="address"
               type="text"
+              defaultValue={brand.address_line1 || ""}
+              suppressHydrationWarning
               className="input-focus"
               placeholder="Street address"
             />
@@ -253,6 +301,8 @@ function BrandTab({ onSuccess, onError }: {
               id="city"
               name="city"
               type="text"
+              defaultValue={brand.city || ""}
+              suppressHydrationWarning
               className="input-focus"
               placeholder="City"
             />
@@ -268,6 +318,8 @@ function BrandTab({ onSuccess, onError }: {
               id="state"
               name="state"
               type="text"
+              defaultValue={brand.state || ""}
+              suppressHydrationWarning
               className="input-focus"
               placeholder="State"
             />
@@ -280,6 +332,8 @@ function BrandTab({ onSuccess, onError }: {
               id="postal_code"
               name="postal_code"
               type="text"
+              defaultValue={brand.postal_code || ""}
+              suppressHydrationWarning
               className="input-focus"
               placeholder="PIN code"
             />
@@ -294,6 +348,8 @@ function BrandTab({ onSuccess, onError }: {
             id="website"
             name="website"
             type="url"
+            defaultValue={brand.website || ""}
+            suppressHydrationWarning
             className="input-focus"
             placeholder="https://your-website.com"
           />
@@ -331,28 +387,5 @@ function SecurityTab() {
         </div>
       </div>
     </div>
-  );
-}
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="btn-primary"
-    >
-      {pending ? (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Saving...
-        </>
-      ) : (
-        <>
-          <Save className="h-4 w-4" />
-          Save Changes
-        </>
-      )}
-    </button>
   );
 }

@@ -32,8 +32,6 @@ export async function middleware(request: NextRequest) {
 
   await supabase.auth.getUser();
 
-  console.log("[MIDDLEWARE] Auth check complete, request:", request.nextUrl.pathname);
-
   return response;
 }
 

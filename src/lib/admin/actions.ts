@@ -179,7 +179,12 @@ export async function getAdminProductsFiltered(options: {
   }
 
   if (options.search) {
-    query = query.or(`title.ilike.%${options.search}%,description.ilike.%${options.search}%`);
+    const term = options.search.slice(0, 200).replace(/[,;()]/g, " ").trim();
+    if (term) {
+      query = query.or(
+        `title.ilike.%${term}%,description.ilike.%${term}%`
+      );
+    }
   }
 
   const { data } = await query;

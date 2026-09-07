@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormStatus } from "react-dom";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -11,7 +12,16 @@ interface MakerFormProps {
   onSuccess?: () => void;
 }
 
-export function MakerFormClient({ productId }: MakerFormProps) {
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? "Saving..." : "Add Maker"}
+    </Button>
+  );
+}
+
+export function MakerFormClient({ productId: _productId }: MakerFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -28,16 +38,12 @@ export function MakerFormClient({ productId }: MakerFormProps) {
     }
   }
 
-  if (success) {
-    return <p className="text-sm text-green-700">Maker added.</p>;
-  }
-
   return (
     <form action={handleAction} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-      {/* Hidden field so the server action knows which product */}
-      <input type="hidden" name="productId" value={productId} />
-      <h2 className="text-lg font-semibold text-gray-900">Add Maker</h2>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {success && (
+        <p role="status" className="text-sm text-green-700">Maker added.</p>
+      )}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -97,7 +103,7 @@ export function MakerFormClient({ productId }: MakerFormProps) {
           />
         </div>
       </div>
-      <Button type="submit">Add Maker</Button>
+      <SubmitButton />
     </form>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -14,21 +14,14 @@ import {
   Save,
   Loader2,
 } from "lucide-react";
-import { createProduct, updateProduct } from "@/lib/products/actions";
+import {
+  submitProduct,
+  upsertProductDraft,
+  type AutosaveStatus,
+} from "@/lib/products/actions";
 import type { ProductFormData } from "@/lib/products/actions";
 
-interface ProductWizardProps {
-  mode: "create" | "edit";
-  productId?: string;
-  initial?: Partial<ProductFormData>;
-}
-
-const STEPS = [
-  { key: "basics", label: "Product Basics", icon: FileText },
-  { key: "story", label: "Craft Story", icon: Feather },
-  { key: "maker", label: "Meet the Maker", icon: Users },
-  { key: "review", label: "Review & Submit", icon: Send },
-];
+const STORAGE_KEY = "pandaverse-wizard-recovery";
 
 interface StoryState {
   inspiration: string;
@@ -46,11 +39,99 @@ interface MakerState {
   location: string;
 }
 
+interface ProductWizardProps {
+  mode: "create" | "edit";
+  productId?: string;
+  initial?: Partial<ProductFormData>;
+}
+
+const STEPS = [
+  { key: "basics", label: "Product Basics", icon: FileText },
+  { key: "story", label: "Craft Story", icon: Feather },
+  { key: "maker", label: "Meet the Maker", icon: Users },
+  { key: "media", label: "Media Gallery", icon: ImageLucide },
+  { key: "review", label: "Review & Submit", icon: Send },
+];
+
+interface SavedDraftState {
+  formData: ProductFormData;
+  storyData: StoryState;
+  makerData: MakerState;
+  productId?: string;
+  savedAt: number;
+}
+
+function loadRecoveryState(): SavedDraftState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedDraftState;
+    if (!parsed?.formData || !parsed?.savedAt) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearRecoveryState(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function saveRecoveryState(state: SavedDraftState): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function buildFormData(formData: ProductFormData): FormData {
+  const fd = new FormData();
+  Object.entries(formData).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      fd.set(key, String(value));
+    }
+  });
+  return fd;
+}
+
+function CheckSvg({ className }: { className?: string }) {
+  return (
+    <svg className={className || "h-4 w-4"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  );
+}
+
+function AlertSvg({ className }: { className?: string }) {
+  return (
+    <svg className={className || "h-4 w-4"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+
 export function ProductWizard({ mode, productId, initial }: ProductWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>("idle");
+  const [touched, setTouched] = useState(false);
+
+  const productIdRef = useRef<string | undefined>(productId);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSubmittingRef = useRef(false);
 
   const [formData, setFormData] = useState<ProductFormData>({
     title: initial?.title || "",
@@ -78,12 +159,97 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
     location: "",
   });
 
+  // Restore from local recovery on mount
+  useEffect(() => {
+    const recovery = loadRecoveryState();
+    if (!recovery) return;
+
+    const isStale = Date.now() - recovery.savedAt > 24 * 60 * 60 * 1000;
+    if (isStale) {
+      clearRecoveryState();
+      return;
+    }
+
+    // If the user returned with a valid productId in recovery, use it.
+    if (recovery.productId && !productIdRef.current) {
+      productIdRef.current = recovery.productId;
+    }
+
+    setFormData(recovery.formData);
+    setStoryData(recovery.storyData);
+    setMakerData(recovery.makerData);
+    setTouched(true);
+    setAutosaveStatus("error");
+    setError("You have unsaved local changes. They have been restored from your last session.");
+  }, []);
+
+  // Persist to localStorage whenever local state changes
+  const persistLocalState = useCallback(() => {
+    const state: SavedDraftState = {
+      formData,
+      storyData,
+      makerData,
+      productId: productIdRef.current,
+      savedAt: Date.now(),
+    };
+    saveRecoveryState(state);
+  }, [formData, storyData, makerData]);
+
+  // Debounced autosave: fires 2 seconds after last change
+  useEffect(() => {
+    if (isSubmittingRef.current) return;
+
+    // Don't autosave an untouched blank form
+    if (!touched) return;
+
+    setAutosaveStatus("idle");
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(async () => {
+      const fd = buildFormData(formData);
+      try {
+        setAutosaveStatus("saving");
+        const result = await upsertProductDraft(productIdRef.current, fd);
+        if (result.ok) {
+          if (result.productId && !productIdRef.current) {
+            productIdRef.current = result.productId;
+          }
+          setAutosaveStatus("saved");
+          clearRecoveryState();
+        } else {
+          setAutosaveStatus("error");
+          setError(result.error || "Autosave failed. Your changes are saved locally.");
+          persistLocalState();
+        }
+      } catch {
+        setAutosaveStatus("error");
+        setError("Network error. Your changes are saved locally.");
+        persistLocalState();
+      }
+    }, 2000);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [formData, storyData, makerData, touched, persistLocalState]);
+
   const updateField = (field: keyof ProductFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setTouched(true);
   };
 
   const canGoNext = () => {
-    if (step === 0) return formData.title.trim().length > 0 && formData.description.trim().length > 0;
+    if (step === 0) {
+      if (formData.title.trim().length > 0 || formData.description.trim().length > 0) {
+        setTouched(true);
+      }
+      return formData.title.trim().length > 0 && formData.description.trim().length > 0;
+    }
     return true;
   };
 
@@ -91,70 +257,92 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
     setSaving(true);
     setError(null);
 
-    const fd = new FormData();
-    Object.entries(formData).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        fd.set(key, String(value));
-      }
-    });
+    const fd = buildFormData(formData);
 
     try {
-      if (mode === "create") {
-        const result = await createProduct(fd);
-        if (result.ok) {
-          router.push(`/dashboard/products/${(result as { ok: true; data: { id: string } }).data.id}`);
-        } else {
-          setError(result.error);
+      const result = await upsertProductDraft(productIdRef.current, fd);
+      if (result.ok) {
+        if (result.productId && !productIdRef.current) {
+          productIdRef.current = result.productId;
         }
+        clearRecoveryState();
+        setAutosaveStatus("saved");
       } else {
-        const result = await updateProduct(productId!, fd);
-        if (result.ok) {
-          router.refresh();
-        } else {
-          setError(result.error);
-        }
+        setError(result.error ?? "Autosave failed. Your changes are saved locally.");
+        setAutosaveStatus("error");
+        persistLocalState();
       }
     } catch {
       setError("Something went wrong. Please try again.");
+      setAutosaveStatus("error");
+      persistLocalState();
     } finally {
       setSaving(false);
     }
   };
 
   const submitForReview = async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setSaving(true);
     setError(null);
 
-    const fd = new FormData();
-    Object.entries(formData).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        fd.set(key, String(value));
+    // First ensure the latest draft is persisted
+    const fd = buildFormData(formData);
+    try {
+      const draftResult = await upsertProductDraft(productIdRef.current, fd);
+      if (!draftResult.ok) {
+        setError(draftResult.error || "Could not save draft before submission.");
+        setSaving(false);
+        isSubmittingRef.current = false;
+        return;
       }
-    });
+      if (draftResult.productId && !productIdRef.current) {
+        productIdRef.current = draftResult.productId;
+      }
+      clearRecoveryState();
+    } catch {
+      setError("Could not save draft before submission. Please try again.");
+      setSaving(false);
+      isSubmittingRef.current = false;
+      return;
+    }
+
+    if (!productIdRef.current) {
+      setError("Could not determine product ID. Please save as draft first.");
+      setSaving(false);
+      isSubmittingRef.current = false;
+      return;
+    }
 
     try {
-      if (mode === "create") {
-        const result = await createProduct(fd);
-        if (result.ok) {
-          const productId = (result as { ok: true; data: { id: string } }).data.id;
-          router.push(`/dashboard/products/${productId}`);
-        } else {
-          setError(result.error);
-        }
-      } else {
-        const result = await updateProduct(productId!, fd);
-        if (result.ok) {
-          router.refresh();
-        } else {
-          setError(result.error);
-        }
+      const submitResult = await submitProduct(productIdRef.current);
+      if (!submitResult.ok) {
+        setError(submitResult.error);
+        setSaving(false);
+        isSubmittingRef.current = false;
+        return;
       }
+      router.push(`/dashboard/products/${productIdRef.current}`);
     } catch {
       setError("Something went wrong. Please try again.");
-    } finally {
       setSaving(false);
+      isSubmittingRef.current = false;
     }
   };
+
+  // Before unload: persist to localStorage so we don't lose work
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      persistLocalState();
+      if (autosaveStatus === "saving") {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [autosaveStatus, persistLocalState]);
 
   return (
     <div className="space-y-6">
@@ -189,100 +377,124 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
       </div>
 
       {/* Error */}
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      {error && touched && (
+        <div role="alert" aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      {/* Step Content */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        {step === 0 && (
-          <BasicsStep formData={formData} updateField={updateField} />
-        )}
-        {step === 1 && (
-          <StoryStep storyData={storyData} setStoryData={setStoryData} />
-        )}
-        {step === 2 && (
-          <MakerStep makerData={makerData} setMakerData={setMakerData} />
-        )}
-        {step === 3 && (
-          <div className="space-y-6">
+      {/* Autosave Status */}
+      {autosaveStatus === "saving" && (
+        <div className="flex items-center gap-2 text-sm text-gray-500" aria-live="polite">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Saving draft...
+        </div>
+      )}
+      {autosaveStatus === "saved" && (
+        <div className="flex items-center gap-2 text-sm text-emerald-600" aria-live="polite">
+          <CheckSvg className="h-4 w-4" />
+          Draft saved
+        </div>
+      )}
+      {autosaveStatus === "error" && !error && (
+        <div className="flex items-center gap-2 text-sm text-amber-600" role="status" aria-live="polite">
+          <AlertSvg className="h-4 w-4" />
+          Changes saved locally — will sync when connection restores
+        </div>
+      )}
+
+      {/* Split-Screen Layout: Form (left) + Live Preview (right, sticky) */}
+      <div className="lg:grid lg:grid-cols-5 lg:gap-6">
+        {/* Left Column: Step Content + Navigation */}
+        <div className="lg:col-span-3 space-y-6">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            {step === 0 && (
+              <BasicsStep formData={formData} updateField={updateField} />
+            )}
+            {step === 1 && (
+              <StoryStep storyData={storyData} setStoryData={setStoryData} setTouched={setTouched} />
+            )}
+            {step === 2 && (
+              <MakerStep makerData={makerData} setMakerData={setMakerData} setTouched={setTouched} />
+            )}
+            {step === 3 && (
+              <MediaGalleryStep productId={productId} mode={mode} />
+            )}
+            {step === 4 && (
+              <ReviewStep formData={formData} storyData={storyData} makerData={makerData} />
+            )}
+          </div>
+
+          {/* Navigation */}
+          <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Media Gallery</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Upload photos and videos after creating your product.
-              </p>
+              {step > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStep(step - 1)}
+                  className="btn-secondary"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </button>
+              )}
             </div>
-            <div className="rounded-xl border-2 border-dashed border-gray-300 p-8 text-center">
-              <ImageLucide className="mx-auto h-10 w-10 text-gray-400 mb-3" />
-              <p className="text-sm font-medium text-gray-700">Photos and videos</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Once your product is created, you&apos;ll be able to upload photos (up to 10MB) and videos (up to 100MB) from the product page.
-              </p>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={saveDraft}
+                disabled={saving}
+                className="btn-secondary"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save as Draft
+              </button>
+
+              {step < STEPS.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={() => canGoNext() && setStep(step + 1)}
+                  disabled={!canGoNext()}
+                  className="btn-primary"
+                  title={!canGoNext() ? "Please fill in the required fields before continuing" : undefined}
+                >
+                  Continue
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={submitForReview}
+                  disabled={saving}
+                  className="btn-primary"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Submit for Curation
+                </button>
+              )}
             </div>
           </div>
-        )}
-        {step === 4 && (
-          <ReviewStep formData={formData} storyData={storyData} makerData={makerData} />
-        )}
-      </div>
-
-      {/* Navigation */}
-      <div className="flex items-center justify-between">
-        <div>
-          {step > 0 && (
-            <button
-              type="button"
-              onClick={() => setStep(step - 1)}
-              className="btn-secondary"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back
-            </button>
-          )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={saveDraft}
-            disabled={saving}
-            className="btn-secondary"
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Save as Draft
-          </button>
-
-          {step < STEPS.length - 1 ? (
-            <button
-              type="button"
-              onClick={() => canGoNext() && setStep(step + 1)}
-              disabled={!canGoNext()}
-              className="btn-primary"
-            >
-              Continue
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={submitForReview}
-              disabled={saving}
-              className="btn-primary"
-            >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              Submit for Curation
-            </button>
-          )}
+        {/* Right Column: Live Preview Panel (sticky on desktop) */}
+        <div className="hidden lg:block lg:col-span-2">
+          <div className="sticky top-6">
+            <LivePreviewPanel
+              step={step}
+              formData={formData}
+              storyData={storyData}
+              makerData={makerData}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -438,12 +650,15 @@ function BasicsStep({
 function StoryStep({
   storyData,
   setStoryData,
+  setTouched,
 }: {
   storyData: StoryState;
   setStoryData: React.Dispatch<React.SetStateAction<StoryState>>;
+  setTouched: (v: boolean) => void;
 }) {
   const update = (field: keyof StoryState, value: string) => {
     setStoryData((prev) => ({ ...prev, [field]: value }));
+    setTouched(true);
   };
 
   return (
@@ -513,12 +728,15 @@ function StoryStep({
 function MakerStep({
   makerData,
   setMakerData,
+  setTouched,
 }: {
   makerData: MakerState;
   setMakerData: React.Dispatch<React.SetStateAction<MakerState>>;
+  setTouched: (v: boolean) => void;
 }) {
   const update = (field: keyof MakerState, value: string) => {
     setMakerData((prev) => ({ ...prev, [field]: value }));
+    setTouched(true);
   };
 
   return (
@@ -674,6 +892,148 @@ function FieldWrapper({
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
+    </div>
+  );
+}
+
+/* ============================================================
+ * Step 4: Media Gallery
+ * Placeholder for now — full integration with MediaGallery
+ * component requires productId to be available on creation mode.
+ * ============================================================ */
+function MediaGalleryStep({ productId: _productId, mode }: { productId?: string; mode: "create" | "edit" }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900">Media Gallery</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Upload photos and videos to showcase your product.
+        </p>
+      </div>
+
+      <div className="rounded-xl border-2 border-dashed border-gray-300 p-8 text-center">
+        <ImageLucide className="mx-auto h-10 w-10 text-gray-400 mb-3" />
+        <p className="text-sm font-medium text-gray-700">Photos and videos</p>
+        <p className="text-xs text-gray-400 mt-1">
+          {mode === "create"
+            ? "Save your product as a draft first, then upload photos and videos from the product page."
+            : "Once your product is saved, you can upload photos (up to 10MB) and videos (up to 100MB)."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+ * Live Preview Panel (Right Column, Sticky)
+ * Consumes wizard state directly — adapts to current step.
+ * ============================================================ */
+function LivePreviewPanel({
+  step,
+  formData,
+  storyData,
+  makerData,
+}: {
+  step: number;
+  formData: ProductFormData;
+  storyData: StoryState;
+  makerData: MakerState;
+}) {
+  const hasProduct = formData.title.trim().length > 0;
+  const hasStory = storyData.inspiration.trim().length > 0 || storyData.crafting_process.trim().length > 0;
+  const hasMaker = makerData.name.trim().length > 0;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      {/* Preview Header */}
+      <div className="border-b border-gray-100 px-5 py-3">
+        <p className="text-xs font-medium uppercase tracking-wider text-gray-400">Customer Preview</p>
+      </div>
+
+      <div className="p-5 space-y-5">
+        {/* Product Card */}
+        <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4">
+          <h4 className="text-sm font-semibold text-gray-900 mb-2">Product Details</h4>
+          {hasProduct ? (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-gray-900">{formData.title || "Untitled Product"}</p>
+              <p className="text-xs text-gray-500 line-clamp-2">{formData.description || "No description"}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {formData.category && (
+                  <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                    {formData.category}
+                  </span>
+                )}
+                {(formData.tags || "")
+                  .split(",")
+                  .filter(Boolean)
+                  .slice(0, 3)
+                  .map((tag) => (
+                    <span key={tag.trim()} className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                      {tag.trim()}
+                    </span>
+                  ))}
+              </div>
+              {(formData.price_min || formData.price_max) && (
+                <p className="text-sm font-medium text-gray-700">
+                  ₹{formData.price_min || "0"} — ₹{formData.price_max || "0"} {formData.currency}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic">Fill in product details to see a preview</p>
+          )}
+        </div>
+
+        {/* Story Card */}
+        <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4">
+          <h4 className="text-sm font-semibold text-gray-900 mb-2">Craft Story</h4>
+          {hasStory ? (
+            <div className="space-y-2">
+              {storyData.inspiration && (
+                <div>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Inspiration</p>
+                  <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{storyData.inspiration}</p>
+                </div>
+              )}
+              {storyData.crafting_process && (
+                <div>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Crafting Process</p>
+                  <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{storyData.crafting_process}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic">Add your craft story to see it here</p>
+          )}
+        </div>
+
+        {/* Maker Card */}
+        <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4">
+          <h4 className="text-sm font-semibold text-gray-900 mb-2">Maker</h4>
+          {hasMaker ? (
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-900">{makerData.name}</p>
+              {makerData.craft_technique && (
+                <p className="text-xs text-gray-500">{makerData.craft_technique}</p>
+              )}
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400">
+                {makerData.years_of_experience && <span>{makerData.years_of_experience} years exp.</span>}
+                {makerData.location && <span>{makerData.location}</span>}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic">Add artisan details to see a preview</p>
+          )}
+        </div>
+
+        {/* Step indicator */}
+        <div className="text-center">
+          <p className="text-xs text-gray-400">
+            Step {step + 1} of {STEPS.length} — {STEPS[step]?.label ?? ""}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

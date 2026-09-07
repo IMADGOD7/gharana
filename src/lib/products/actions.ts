@@ -28,6 +28,11 @@ export type ProductRow = {
   reviewed_by: string | null;
   created_at: string;
   updated_at: string;
+  primary_media?: {
+    storage_path: string;
+    media_type: "image" | "video";
+    file_name: string | null;
+  } | null;
 };
 
 export type ProductWithRelations = ProductRow & {
@@ -327,6 +332,120 @@ export async function updateProduct(id: string, formData: FormData): Promise<{ o
   return { ok: true };
 }
 
+// ============================================================
+// Autosave (D-UX-03)
+// ============================================================
+export type AutosaveStatus = "idle" | "saving" | "saved" | "error";
+
+export interface AutosaveResult {
+  ok: boolean;
+  productId?: string;
+  error?: string;
+}
+
+/**
+ * Creates or updates a draft product for autosave purposes.
+ * Unlike createProduct, this does not redirect on create mode.
+ * The caller (wizard) manages navigation.
+ */
+export async function upsertProductDraft(
+  productId: string | undefined,
+  formData: FormData
+): Promise<AutosaveResult> {
+  const profile = await requireAuth();
+  const supabase = await createServerClient();
+
+  const title = String(formData.get("title") || "").trim();
+  const description = String(formData.get("description") || "").trim();
+  const category = String(formData.get("category") || "").trim() || null;
+  const tagsRaw = String(formData.get("tags") || "").trim();
+  const priceMin = formData.get("price_min") ? parseFloat(String(formData.get("price_min"))) : null;
+  const priceMax = formData.get("price_max") ? parseFloat(String(formData.get("price_max"))) : null;
+  const currency = String(formData.get("currency") || "INR").trim();
+
+  if (!title) {
+    return { ok: false, error: "Title is required" };
+  }
+
+  const tags = tagsRaw
+    ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
+    : [];
+
+  if (priceMin !== null && priceMax !== null && priceMin > priceMax) {
+    return { ok: false, error: "Minimum price cannot exceed maximum price" };
+  }
+
+  if (productId) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("partner_id, status")
+      .eq("id", productId)
+      .single<{ partner_id: string; status: string }>();
+
+    if (!product) {
+      return { ok: false, error: "Product not found" };
+    }
+
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
+    if (!partnerProfile || product.partner_id !== partnerProfile.id) {
+      return { ok: false, error: "Not authorized" };
+    }
+
+    if (product.status !== "draft") {
+      return { ok: false, error: "Only draft products can be edited" };
+    }
+
+    const { error } = await supabase
+      .from("products")
+      .update({
+        title,
+        description: description || "",
+        category,
+        tags,
+        price_min: priceMin,
+        price_max: priceMax,
+        currency,
+      })
+      .eq("id", productId);
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    revalidatePath("/dashboard/products");
+    revalidatePath(`/dashboard/products/${productId}`);
+    return { ok: true, productId };
+  }
+
+  const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
+  if (!partnerProfile) {
+    return { ok: false, error: "Failed to set up partner profile. Please contact support." };
+  }
+
+  const { data, error } = await supabase
+    .from("products")
+    .insert({
+      partner_id: partnerProfile.id,
+      title,
+      description: description || "",
+      category,
+      tags,
+      price_min: priceMin,
+      price_max: priceMax,
+      currency,
+      status: "draft",
+    })
+    .select("id")
+    .single<ProductRow>();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message || "Failed to create draft" };
+  }
+
+  revalidatePath("/dashboard/products");
+  return { ok: true, productId: data.id };
+}
+
 export async function submitProduct(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const profile = await requireAuth();
   const supabase = await createServerClient();
@@ -377,16 +496,8 @@ export async function submitProduct(id: string): Promise<{ ok: true } | { ok: fa
     return { ok: false, error: error.message };
   }
 
-  await supabase.from("submission_history").insert({
-    product_id: id,
-    action: "submit",
-    from_status: "draft",
-    to_status: "submitted",
-    notes: "Product submitted for review",
-  });
-
-  revalidatePath(`/dashboard/products/${id}`);
   revalidatePath("/dashboard/products");
+  revalidatePath(`/dashboard/products/${id}`);
   return { ok: true };
 }
 
@@ -438,51 +549,43 @@ export async function getOrCreatePartnerProfile(
   supabase: Awaited<ReturnType<typeof createServerClient>>,
   userId: string
 ): Promise<{ id: string } | null> {
-  const { data: existing } = await supabase
+  const { data, error } = await supabase
     .from("partner_profiles")
-    .select("id")
-    .eq("user_id", userId)
-    .single<{ id: string }>();
-
-  if (existing) {
-    return existing;
-  }
-
-  const { data: created, error } = await supabase
-    .from("partner_profiles")
-    .insert({ user_id: userId, brand_name: "" })
+    .upsert({ user_id: userId, brand_name: "" }, { onConflict: "user_id" })
     .select("id")
     .single<{ id: string }>();
 
-  if (error || !created) {
+  if (error || !data) {
+    console.error("[getOrCreatePartnerProfile] failed:", error);
     return null;
   }
 
-  return created;
+  return data;
 }
 // ============================================================
-// Search & filter for partner product list
+// Search & filter for partner product list (with primary media for grid view)
 // ============================================================
-export async function getPartnerProductsFiltered(options: {
+export async function getPartnerProductsWithMedia(options: {
   status?: string;
   search?: string;
-}) {
+}): Promise<ProductRow[]> {
   const profile = await requireAuth();
   const supabase = await createServerClient();
 
-  const { data: partnerProfile } = await supabase
+  const { data: partnerRow } = await supabase
     .from("partner_profiles")
     .select("id")
     .eq("user_id", profile.id)
     .single<{ id: string }>();
 
-  if (!partnerProfile) {
+  let partnerId: string;
+  if (partnerRow) {
+    partnerId = partnerRow.id;
+  } else {
     const autoProfile = await getOrCreatePartnerProfile(supabase, profile.id);
     if (!autoProfile) return [];
+    partnerId = autoProfile.id;
   }
-
-  const partnerId = partnerProfile?.id;
-  if (!partnerId) return [];
 
   let query = supabase
     .from("products")
@@ -495,9 +598,52 @@ export async function getPartnerProductsFiltered(options: {
   }
 
   if (options.search) {
-    query = query.or(`title.ilike.%${options.search}%,description.ilike.%${options.search}%`);
+    const term = options.search.slice(0, 200).replace(/[,;()]/g, " ").trim();
+    if (term) {
+      query = query.or(
+        `title.ilike.%${term}%,description.ilike.%${term}%`
+      );
+    }
   }
 
-  const { data } = await query;
-  return (data ?? []) as ProductRow[];
+  const { data: products } = await query;
+
+  if (!products || products.length === 0) return [];
+
+  const productIds = products.map((p) => p.id);
+  const { data: mediaRows } = await supabase
+    .from("product_media")
+    .select("product_id, storage_path, media_type, file_name, is_primary, sort_order")
+    .in("product_id", productIds)
+    .eq("is_primary", true)
+    .order("sort_order", { ascending: true });
+
+  const primaryByProduct = new Map<string, {
+    storage_path: string;
+    media_type: "image" | "video";
+    file_name: string | null;
+  }>();
+
+  for (const m of mediaRows ?? []) {
+    if (!primaryByProduct.has(m.product_id)) {
+      primaryByProduct.set(m.product_id, {
+        storage_path: m.storage_path,
+        media_type: m.media_type as "image" | "video",
+        file_name: m.file_name,
+      });
+    }
+  }
+
+  return products.map((p) => ({
+    ...p,
+    primary_media: primaryByProduct.get(p.id) ?? null,
+  })) as ProductRow[];
+}
+
+export async function getPartnerProductsFiltered(options: {
+  status?: string;
+  search?: string;
+}) {
+  const products = await getPartnerProductsWithMedia(options);
+  return products.map(({ primary_media: _primary_media, ...rest }) => rest) as ProductRow[];
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormStatus } from "react-dom";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,15 @@ interface StoryFormProps {
     crafting_process: string;
     cultural_context: string | null;
   };
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? "Saving..." : "Save story"}
+    </Button>
+  );
 }
 
 export function StoryFormClient({ productId, initial }: StoryFormProps) {
@@ -33,12 +43,11 @@ export function StoryFormClient({ productId, initial }: StoryFormProps) {
     }
   }
 
-  if (success) {
-    return <Alert variant="success">Story saved successfully.</Alert>;
-  }
-
   return (
     <form action={handleAction} className="space-y-6">
+      {success && (
+        <Alert variant="success">Story saved successfully.</Alert>
+      )}
       {error && <Alert variant="error">{error}</Alert>}
 
       {/* Hidden field so the server action knows which product */}
@@ -88,7 +97,7 @@ export function StoryFormClient({ productId, initial }: StoryFormProps) {
         />
       </div>
 
-      <Button type="submit">Save story</Button>
+      <SubmitButton />
     </form>
   );
 }

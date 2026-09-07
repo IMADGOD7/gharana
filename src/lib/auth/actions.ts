@@ -8,10 +8,56 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getOrCreatePartnerProfile } from "@/lib/products/actions";
 
 export type AuthResult =
   | { ok: true; message: string }
   | { ok: false; error: string };
+
+export async function updateBrandProfile(
+  _prev: AuthResult | null,
+  formData: FormData
+): Promise<AuthResult> {
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "Not authenticated" };
+  }
+
+  const partnerProfile = await getOrCreatePartnerProfile(supabase, user.id);
+  if (!partnerProfile) {
+    return { ok: false, error: "Partner profile not found" };
+  }
+
+  const brand_name = String(formData.get("brand_name") || "").trim();
+  const brand_bio = String(formData.get("brand_bio") || "").trim() || null;
+  const address = String(formData.get("address") || "").trim() || null;
+  const city = String(formData.get("city") || "").trim() || null;
+  const state = String(formData.get("state") || "").trim() || null;
+  const postal_code = String(formData.get("postal_code") || "").trim() || null;
+  const website = String(formData.get("website") || "").trim() || null;
+
+  const { error } = await supabase
+    .from("partner_profiles")
+    .update({
+      brand_name: brand_name || undefined,
+      bio: brand_bio,
+      address_line1: address,
+      city,
+      state,
+      postal_code,
+      website,
+    })
+    .eq("id", partnerProfile.id);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/dashboard/profile");
+  revalidatePath("/dashboard");
+  return { ok: true, message: "Brand profile updated" };
+}
 
 export async function signUp(
   _prev: AuthResult | null,
@@ -35,12 +81,14 @@ export async function signUp(
 
   const supabase = await createServerClient();
 
+  const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || ""}/auth/callback`;
+
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { full_name: fullName },
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      emailRedirectTo: redirectUrl,
     },
   });
 
