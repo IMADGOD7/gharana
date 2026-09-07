@@ -26,6 +26,7 @@ export type MediaAssetRow = {
   display_order: number;
   is_primary: boolean;
   created_at: string;
+  signed_url?: string;
 };
 
 // ============================================================
@@ -148,8 +149,16 @@ export async function uploadMedia(
     return { ok: false, error: `Failed to save media record: ${error.message}` };
   }
 
+  // Generate a signed URL so the client can display the preview immediately
+  let signedUrl: string | undefined;
+  try {
+    signedUrl = await createSignedUrlFromStorage(bucket, storagePath);
+  } catch {
+    // Non-fatal: the DB row is saved, preview can resolve on next refresh
+  }
+
   revalidatePath(`/dashboard/products/${productId}`);
-  return { ok: true, data };
+  return { ok: true, data: { ...data, signed_url: signedUrl } };
 }
 
 // ============================================================

@@ -122,8 +122,10 @@ export function MediaGallery({ productId, initialMedia, isDraft }: MediaGalleryP
         setLastFailedFile(file);
       } else if (result.ok && result.data) {
         setUploadProgress({ stage: "done", progress: 100, message: "Upload complete!" });
-        // Resolve signed URL before adding to gallery — without it the item shows "No preview"
-        const resolved = await resolveSignedUrl(result.data);
+        // Server may already include a signed_url; resolve only if missing
+        const resolved = result.data.signed_url
+          ? result.data
+          : await resolveSignedUrl(result.data);
         setMedia((prev) => [...prev, resolved]);
         setUploadSuccess(true);
         setUploadError(null);
@@ -176,7 +178,9 @@ export function MediaGallery({ productId, initialMedia, isDraft }: MediaGalleryP
         setLastFailedFile(lastFailedFile);
       } else if (result.ok && result.data) {
         setUploadProgress({ stage: "done", progress: 100, message: "Upload complete!" });
-        const resolved = await resolveSignedUrl(result.data);
+        const resolved = result.data.signed_url
+          ? result.data
+          : await resolveSignedUrl(result.data);
         setMedia((prev) => [...prev, resolved]);
         setUploadSuccess(true);
         setUploadError(null);
