@@ -26,8 +26,11 @@ export const getSession = cache(async () => {
 
 export const getUser = cache(async () => {
   const supabase = await createServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user ?? null;
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    console.error("[getUser] auth.getUser() failed:", error);
+  }
+  return data.user ?? null;
 });
 
 export const getProfile = cache(async (): Promise<Profile | null> => {
@@ -42,42 +45,52 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
     .eq("id", user.id)
     .single<Profile>();
 
-  // If no profile row exists, try to create one (self-healing for legacy accounts)
-  if (error || !data) {
-        try {
-      const { data: created, error: createError } = await supabase
-        .from("profiles")
-        .insert({
-          id: user.id,
-          email: user.email ?? "",
-          full_name: user.user_metadata?.full_name ?? "",
-          role: "partner",
-        })
-        .select("*")
-        .single<Profile>();
+  if (error && error.code !== "PGRST116") {
+    console.error("[getProfile] profile lookup failed:", error);
+  }
+  return data ?? null;
+});
 
-      if (createError) {
-            return null;
-      }
+export const ensureProfile = cache(async (): Promise<Profile | null> => {
+  const user = await getUser();
+  if (!user) return null;
 
-      // Also create the partner profile
-      const { error: ppError } = await supabase
-        .from("partner_profiles")
-        .insert({ user_id: user.id, brand_name: "" })
-        .select("id")
-        .single<{ id: string }>();
+  const existing = await getProfile();
+  if (existing) return existing;
 
-      if (ppError) {
-          } else {
-          }
+  const supabase = await createServerClient();
 
-          return created;
-    } catch {
-          return null;
-    }
+  const { data: created, error: createError } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        id: user.id,
+        email: user.email ?? "",
+        full_name: user.user_metadata?.full_name ?? "",
+        role: "partner",
+      },
+      { onConflict: "id" }
+    )
+    .select("*")
+    .single<Profile>();
+
+  if (createError || !created) {
+    console.error("[ensureProfile] profile upsert failed:", createError);
+    return null;
   }
 
-  return data;
+  const { error: ppError } = await supabase
+    .from("partner_profiles")
+    .upsert({ user_id: user.id, brand_name: "" }, { onConflict: "user_id" })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (ppError) {
+    console.error("[ensureProfile] partner_profiles upsert failed:", ppError);
+    return null;
+  }
+
+  return created;
 });
 
 export async function requireAuth() {
@@ -96,4 +109,15 @@ export async function requirePartner() {
   const profile = await getProfile();
   if (!profile || profile.role !== "partner") redirect("/");
   return profile;
+}
+
+export async function getPartnerProfileForUser(userId: string) {
+  const supabase = await createServerClient();
+  const { data } = await supabase
+    .from("partner_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+
+  return data ?? null;
 }

@@ -25,6 +25,7 @@ declare module "lucide-react" {
   export const AlertTriangle: FC<SVGProps<SVGSVGElement>>;
   export const RotateCcw: FC<SVGProps<SVGSVGElement>>;
   export const XCircle: FC<SVGProps<SVGSVGElement>>;
+  export const Trash2: FC<SVGProps<SVGSVGElement>>;
   export const Clock: FC<SVGProps<SVGSVGElement>>;
   export const IndianRupee: FC<SVGProps<SVGSVGElement>>;
   export const Calendar: FC<SVGProps<SVGSVGElement>>;
@@ -97,6 +98,7 @@ declare module "lucide-react" {
   export const AlertTriangle: FC<SVGProps<SVGSVGElement>>;
   export const RotateCcw: FC<SVGProps<SVGSVGElement>>;
   export const XCircle: FC<SVGProps<SVGSVGElement>>;
+  export const Trash2: FC<SVGProps<SVGSVGElement>>;
   export const Clock: FC<SVGProps<SVGSVGElement>>;
   export const Save: FC<SVGProps<SVGSVGElement>>;
   export const Loader2: FC<SVGProps<SVGSVGElement>>;
@@ -121,6 +123,10 @@ declare module "lucide-react" {
 declare module "sonner" {
   import { FC } from "react";
   export const Toaster: FC<{ position?: string; richColors?: boolean }>;
+  export const toast: ((msg: string) => void) & {
+    success: (msg: string) => void;
+    error: (msg: string) => void;
+  };
 }
 
 declare module "clsx" {

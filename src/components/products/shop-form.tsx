@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormStatus } from "react-dom";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,15 @@ interface ShopFormProps {
   allShops?: ShopRow[];
   productId?: string;
   initial?: ShopRow | null;
+}
+
+function SubmitButton({ initial }: { initial?: ShopRow | null }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? "Saving..." : initial?.id ? "Update shop" : "Add shop"}
+    </Button>
+  );
 }
 
 function toDate(val: string | null | undefined): string {
@@ -40,12 +50,11 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
     }
   }
 
-  if (success) {
-    return <Alert variant="success">Shop saved successfully.</Alert>;
-  }
-
   return (
     <form action={handleAction} className="space-y-4">
+      {success && (
+        <Alert variant="success">Shop saved successfully.</Alert>
+      )}
       {error && <Alert variant="error">{error}</Alert>}
 
       {initial?.id && <input type="hidden" name="shopId" value={initial.id} />}
@@ -211,7 +220,7 @@ export function ShopFormClient({ productId, initial, allShops: _allShops }: Shop
         </label>
       </div>
 
-      <Button type="submit">{initial ? "Update shop" : "Add shop"}</Button>
+      <SubmitButton initial={initial} />
     </form>
   );
 }

@@ -153,6 +153,16 @@ export async function uploadMedia(
 }
 
 // ============================================================
+// Types for client-side upload tracking
+// ============================================================
+
+export type UploadProgress = {
+  stage: "validating" | "uploading" | "saving" | "done" | "error";
+  progress: number; // 0-100
+  message?: string;
+};
+
+// ============================================================
 // Queries
 // ============================================================
 
@@ -172,6 +182,47 @@ export async function getProductMedia(productId: string): Promise<MediaAssetRow[
 export async function getMediaSignedUrl(storagePath: string, mediaType: "image" | "video"): Promise<string> {
   const bucket = mediaType === "video" ? "product-videos" : "product-photos";
   return createSignedUrlFromStorage(bucket, storagePath);
+}
+
+// ============================================================
+// Download — authorized media download link
+// ============================================================
+
+export async function getMediaDownloadUrl(
+  productId: string,
+  mediaId: string
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const { supabase } = await authorizeProductAccess(productId);
+
+    // Fetch the media record
+    const { data: media } = await supabase
+      .from("product_media")
+      .select("storage_path, media_type, file_name")
+      .eq("id", mediaId)
+      .eq("product_id", productId)
+      .single<{ storage_path: string; media_type: string; file_name: string }>();
+
+    if (!media) {
+      return { ok: false, error: "Media not found" };
+    }
+
+    const bucket = media.media_type === "video" ? "product-videos" : "product-photos";
+
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(media.storage_path, 60);
+
+    if (signedError || !signedData) {
+      console.error(`[media] Failed to create download URL for ${media.storage_path}:`, signedError);
+      return { ok: false, error: `Unable to generate download link: ${signedError?.message || "Unknown error"}` };
+    }
+
+    return { ok: true, url: signedData.signedUrl };
+  } catch (err) {
+    console.error(`[media] getMediaDownloadUrl error for ${mediaId}:`, err);
+    return { ok: false, error: "Failed to generate download link" };
+  }
 }
 
 // ============================================================

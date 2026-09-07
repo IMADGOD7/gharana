@@ -19,7 +19,7 @@ export function Input({ label, error, className = "", id, ...props }: InputProps
         className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${error ? "border-red-300" : ""} ${className}`}
         {...props}
       />
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p role="alert" className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -44,7 +44,7 @@ export function Textarea({ label, error, className = "", id, ...props }: Textare
         className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${error ? "border-red-300" : ""} ${className}`}
         {...props}
       />
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p role="alert" className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -79,7 +79,7 @@ export function Select({ label, options, error, placeholder, className = "", id,
           </option>
         ))}
       </select>
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p role="alert" className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
