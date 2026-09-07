@@ -127,6 +127,7 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>("idle");
+  const [touched, setTouched] = useState(false);
 
   const productIdRef = useRef<string | undefined>(productId);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -177,6 +178,7 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
     setFormData(recovery.formData);
     setStoryData(recovery.storyData);
     setMakerData(recovery.makerData);
+    setTouched(true);
     setAutosaveStatus("error");
     setError("You have unsaved local changes. They have been restored from your last session.");
   }, []);
@@ -196,6 +198,9 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
   // Debounced autosave: fires 2 seconds after last change
   useEffect(() => {
     if (isSubmittingRef.current) return;
+
+    // Don't autosave an untouched blank form
+    if (!touched) return;
 
     setAutosaveStatus("idle");
 
@@ -231,14 +236,20 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [formData, storyData, makerData, persistLocalState]);
+  }, [formData, storyData, makerData, touched, persistLocalState]);
 
   const updateField = (field: keyof ProductFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setTouched(true);
   };
 
   const canGoNext = () => {
-    if (step === 0) return formData.title.trim().length > 0 && formData.description.trim().length > 0;
+    if (step === 0) {
+      if (formData.title.trim().length > 0 || formData.description.trim().length > 0) {
+        setTouched(true);
+      }
+      return formData.title.trim().length > 0 && formData.description.trim().length > 0;
+    }
     return true;
   };
 
@@ -366,7 +377,7 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
       </div>
 
       {/* Error */}
-      {error && (
+      {error && touched && (
         <div role="alert" aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
@@ -401,10 +412,10 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
               <BasicsStep formData={formData} updateField={updateField} />
             )}
             {step === 1 && (
-              <StoryStep storyData={storyData} setStoryData={setStoryData} />
+              <StoryStep storyData={storyData} setStoryData={setStoryData} setTouched={setTouched} />
             )}
             {step === 2 && (
-              <MakerStep makerData={makerData} setMakerData={setMakerData} />
+              <MakerStep makerData={makerData} setMakerData={setMakerData} setTouched={setTouched} />
             )}
             {step === 3 && (
               <MediaGalleryStep productId={productId} mode={mode} />
@@ -639,12 +650,15 @@ function BasicsStep({
 function StoryStep({
   storyData,
   setStoryData,
+  setTouched,
 }: {
   storyData: StoryState;
   setStoryData: React.Dispatch<React.SetStateAction<StoryState>>;
+  setTouched: (v: boolean) => void;
 }) {
   const update = (field: keyof StoryState, value: string) => {
     setStoryData((prev) => ({ ...prev, [field]: value }));
+    setTouched(true);
   };
 
   return (
@@ -714,12 +728,15 @@ function StoryStep({
 function MakerStep({
   makerData,
   setMakerData,
+  setTouched,
 }: {
   makerData: MakerState;
   setMakerData: React.Dispatch<React.SetStateAction<MakerState>>;
+  setTouched: (v: boolean) => void;
 }) {
   const update = (field: keyof MakerState, value: string) => {
     setMakerData((prev) => ({ ...prev, [field]: value }));
+    setTouched(true);
   };
 
   return (
