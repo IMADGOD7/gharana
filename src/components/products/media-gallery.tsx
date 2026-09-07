@@ -28,6 +28,11 @@ interface MediaGalleryProps {
 
 export function MediaGallery({ productId, initialMedia, isDraft }: MediaGalleryProps) {
   const [media, setMedia] = useState<MediaItem[]>(initialMedia);
+
+  // Sync media when server re-renders (e.g. after a page refresh with fresh signed URLs)
+  useEffect(() => {
+    setMedia(initialMedia);
+  }, [initialMedia]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
