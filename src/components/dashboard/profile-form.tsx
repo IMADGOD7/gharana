@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { updateProfile, updateBrandProfile } from "@/lib/auth/actions";
 import { cn } from "@/lib/utils";

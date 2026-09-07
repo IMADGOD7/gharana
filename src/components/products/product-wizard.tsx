@@ -901,7 +901,7 @@ function FieldWrapper({
  * Placeholder for now — full integration with MediaGallery
  * component requires productId to be available on creation mode.
  * ============================================================ */
-function MediaGalleryStep({ productId, mode }: { productId?: string; mode: "create" | "edit" }) {
+function MediaGalleryStep({ productId: _productId, mode }: { productId?: string; mode: "create" | "edit" }) {
   return (
     <div className="space-y-6">
       <div>

@@ -21,7 +21,7 @@ function SubmitButton() {
   );
 }
 
-export function MakerFormClient({ productId }: MakerFormProps) {
+export function MakerFormClient({ productId: _productId }: MakerFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);

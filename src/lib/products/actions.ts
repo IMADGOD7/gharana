@@ -645,5 +645,5 @@ export async function getPartnerProductsFiltered(options: {
   search?: string;
 }) {
   const products = await getPartnerProductsWithMedia(options);
-  return products.map(({ primary_media, ...rest }) => rest) as ProductRow[];
+  return products.map(({ primary_media: _primary_media, ...rest }) => rest) as ProductRow[];
 }

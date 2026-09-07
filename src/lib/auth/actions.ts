@@ -30,7 +30,6 @@ export async function updateBrandProfile(
   }
 
   const brand_name = String(formData.get("brand_name") || "").trim();
-  const brand_tagline = String(formData.get("brand_tagline") || "").trim() || null;
   const brand_bio = String(formData.get("brand_bio") || "").trim() || null;
   const address = String(formData.get("address") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
