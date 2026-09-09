@@ -30,10 +30,6 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // typedRoutes: true,  // Re-enable once all routes are defined (T1+)
 
-  serverActions: {
-    bodySizeLimit: 50 * 1024 * 1024, // 50 MB — needed for media uploads via Server Actions
-  },
-
   env: {
     // Makes the resolved URL available as process.env.NEXT_PUBLIC_SITE_URL
     // in BOTH server and client bundles for every deployment.
