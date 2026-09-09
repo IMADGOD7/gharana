@@ -164,6 +164,13 @@ create policy "Users can view own profile"
     auth.uid() = id
   );
 
+create policy "Users can insert own profile"
+  on public.profiles for insert
+  to authenticated
+  with check (
+    auth.uid() = id
+  );
+
 create policy "Users can update own non-role fields"
   on public.profiles for update
   to authenticated

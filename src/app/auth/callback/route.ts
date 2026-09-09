@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { ensureProfile } from "@/lib/auth/session";
+import { ensureProfileForUser } from "@/lib/auth/session";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -27,16 +27,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // @supabase/ssr client reads code_verifier from request cookies internally
     const supabase = await createClient();
 
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error && data.session) {
-      // Ensure the public.profiles and partner_profiles rows exist
-      // before the user hits the dashboard layout. signUp() only
-      // creates the auth.users entry; profile creation is app-side.
-      await ensureProfile();
+    if (!error && data.session && data.user) {
+      // Pass the authenticated client + user directly. The session
+      // lives on this client instance; a fresh createClient() call
+      // would not see the cookies set by exchangeCodeForSession.
+      await ensureProfileForUser(supabase, data.user);
 
       return NextResponse.redirect(`${origin}${next}`);
     }

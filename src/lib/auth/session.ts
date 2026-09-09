@@ -55,10 +55,20 @@ export const ensureProfile = cache(async (): Promise<Profile | null> => {
   const user = await getUser();
   if (!user) return null;
 
-  const existing = await getProfile();
-  if (existing) return existing;
+  return ensureProfileForUser(user);
+});
 
-  const supabase = await createServerClient();
+/**
+ * Ensure profile rows exist for a known user object.
+ * Used by the auth callback where the session was just established
+ * but request cookies don't yet carry the new auth tokens.
+ */
+export async function ensureProfileForUser(
+  supabase: ReturnType<typeof createServerClient>,
+  user: { id: string; email?: string | null; user_metadata?: { full_name?: string | null } }
+): Promise<Profile | null> {
+  const existing = await getProfileForUser(supabase, user.id);
+  if (existing) return existing;
 
   const { data: created, error: createError } = await supabase
     .from("profiles")
@@ -75,7 +85,7 @@ export const ensureProfile = cache(async (): Promise<Profile | null> => {
     .single<Profile>();
 
   if (createError || !created) {
-    console.error("[ensureProfile] profile upsert failed:", createError);
+    console.error("[ensureProfileForUser] profile upsert failed:", createError);
     return null;
   }
 
@@ -86,12 +96,25 @@ export const ensureProfile = cache(async (): Promise<Profile | null> => {
     .single<{ id: string }>();
 
   if (ppError) {
-    console.error("[ensureProfile] partner_profiles upsert failed:", ppError);
+    console.error("[ensureProfileForUser] partner_profiles upsert failed:", ppError);
     return null;
   }
 
   return created;
-});
+}
+
+async function getProfileForUser(supabase: ReturnType<typeof createServerClient>, userId: string): Promise<Profile | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single<Profile>();
+
+  if (error && error.code !== "PGRST116") {
+    console.error("[getProfileForUser] profile lookup failed:", error);
+  }
+  return data ?? null;
+}
 
 export async function requireAuth() {
   const user = await getUser();
