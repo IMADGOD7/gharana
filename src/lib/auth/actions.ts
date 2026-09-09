@@ -31,7 +31,8 @@ export async function forgotPassword(
   const supabase = await createServerClient();
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/reset-password`,
+    // redirectTo removed — triggers PKCE flow requiring same-browser code_verifier.
+    // Supabase will send OTP-based token_hash links that work cross-device.
   });
 
   // Always return success to avoid leaking which emails are registered
@@ -150,7 +151,9 @@ export async function signUp(
     password,
     options: {
       data: { full_name: fullName },
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+      // emailRedirectTo removed — it triggers PKCE flow which requires a
+      // code_verifier cookie from the same browser session. Without it,
+      // Supabase sends OTP-based token_hash links that work cross-device.
     },
   });
 
