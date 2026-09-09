@@ -71,98 +71,103 @@ export async function uploadMedia(
   productId: string,
   formData: FormData
 ): Promise<{ ok: true; data: MediaAssetRow } | { ok: false; error: string }> {
-  const { profile, supabase, product } = await authorizeProductAccess(productId);
+  try {
+    const { profile, supabase, product } = await authorizeProductAccess(productId);
 
-  if (profile.role !== "admin" && product.status !== "draft") {
-    return { ok: false, error: "Only draft products can be edited" };
-  }
+    if (profile.role !== "admin" && product.status !== "draft") {
+      return { ok: false, error: "Only draft products can be edited" };
+    }
 
-  const file = formData.get("file") as File | null;
-  if (!file || !(file instanceof File) || file.size === 0) {
-    return { ok: false, error: "No file provided" };
-  }
+    const file = formData.get("file") as File | null;
+    if (!file || !(file instanceof File) || file.size === 0) {
+      return { ok: false, error: "No file provided" };
+    }
 
-  // Validate file
-  const { validateMediaFile } = await import("./storage");
-  const validation = validateMediaFile(file);
-  if (!validation.ok) {
-    return { ok: false, error: validation.error || "Invalid file" };
-  }
+    // Validate file
+    const { validateMediaFile } = await import("./storage");
+    const validation = validateMediaFile(file);
+    if (!validation.ok) {
+      return { ok: false, error: validation.error || "Invalid file" };
+    }
 
-  // Get partner_id for path
-  let partnerId: string | undefined;
-  if (profile.role === "admin") {
-    const { data: productRow } = await supabase
-      .from("products")
-      .select("partner_id")
-      .eq("id", productId)
-      .single<{ partner_id: string }>();
-    if (!productRow) return { ok: false, error: "Product not found" };
-    partnerId = productRow.partner_id;
-  } else {
-    const pp = await getOrCreatePartnerProfile(supabase, profile.id);
-    if (!pp) return { ok: false, error: "Partner profile not found" };
-    partnerId = pp.id;
-  }
+    // Get partner_id for path
+    let partnerId: string | undefined;
+    if (profile.role === "admin") {
+      const { data: productRow } = await supabase
+        .from("products")
+        .select("partner_id")
+        .eq("id", productId)
+        .single<{ partner_id: string }>();
+      if (!productRow) return { ok: false, error: "Product not found" };
+      partnerId = productRow.partner_id;
+    } else {
+      const pp = await getOrCreatePartnerProfile(supabase, profile.id);
+      if (!pp) return { ok: false, error: "Partner profile not found" };
+      partnerId = pp.id;
+    }
 
-  if (!partnerId) {
-    return { ok: false, error: "Unable to resolve partner account" };
-  }
+    if (!partnerId) {
+      return { ok: false, error: "Unable to resolve partner account" };
+    }
 
-  const bucket = getBucketForMimeType(file.type);
-  const mediaType = file.type.startsWith("video/") ? "video" : "image";
-  const storagePath = generateStoragePath({
-    partnerId,
-    productId,
-    fileName: file.name,
-  });
-
-  // Upload to Storage (server-side, authenticated as user — RLS will allow)
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(storagePath, file, {
-      contentType: file.type,
-      cacheControl: "3600",
-      upsert: false,
+    const bucket = getBucketForMimeType(file.type);
+    const mediaType = file.type.startsWith("video/") ? "video" : "image";
+    const storagePath = generateStoragePath({
+      partnerId,
+      productId,
+      fileName: file.name,
     });
 
-  if (uploadError) {
-    return { ok: false, error: `Upload failed: ${uploadError.message}` };
+    // Upload to Storage (server-side, authenticated as user — RLS will allow)
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(storagePath, file, {
+        contentType: file.type,
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      return { ok: false, error: `Upload failed: ${uploadError.message}` };
+    }
+
+    // Insert media metadata
+    const { data, error } = await supabase
+      .from("product_media")
+      .insert({
+        product_id: productId,
+        partner_id: partnerId,
+        media_type: mediaType,
+        storage_path: storagePath,
+        file_name: file.name,
+        file_size_bytes: file.size,
+        mime_type: file.type,
+        display_order: 0,
+        is_primary: false,
+      })
+      .select("*")
+      .single<MediaAssetRow>();
+
+    if (error) {
+      // Try to clean up the uploaded file if metadata insert fails
+      await supabase.storage.from(bucket).remove([storagePath]);
+      return { ok: false, error: `Failed to save media record: ${error.message}` };
+    }
+
+    // Generate a signed URL so the client can display the preview immediately
+    let signedUrl: string | undefined;
+    try {
+      signedUrl = await createSignedUrlFromStorage(bucket, storagePath);
+    } catch {
+      // Non-fatal: the DB row is saved, preview can resolve on next refresh
+    }
+
+    revalidatePath(`/dashboard/products/${productId}`);
+    return { ok: true, data: { ...data, signed_url: signedUrl } };
+  } catch (err) {
+    console.error("[uploadMedia] unexpected error:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Upload failed. Please try again." };
   }
-
-  // Insert media metadata
-  const { data, error } = await supabase
-    .from("product_media")
-    .insert({
-      product_id: productId,
-      partner_id: partnerId,
-      media_type: mediaType,
-      storage_path: storagePath,
-      file_name: file.name,
-      file_size_bytes: file.size,
-      mime_type: file.type,
-      display_order: 0,
-      is_primary: false,
-    })
-    .select("*")
-    .single<MediaAssetRow>();
-
-  if (error) {
-    // Try to clean up the uploaded file if metadata insert fails
-    await supabase.storage.from(bucket).remove([storagePath]);
-    return { ok: false, error: `Failed to save media record: ${error.message}` };
-  }
-
-  // Generate a signed URL so the client can display the preview immediately
-  let signedUrl: string | undefined;
-  try {
-    signedUrl = await createSignedUrlFromStorage(bucket, storagePath);
-  } catch {
-    // Non-fatal: the DB row is saved, preview can resolve on next refresh
-  }
-
-  revalidatePath(`/dashboard/products/${productId}`);
-  return { ok: true, data: { ...data, signed_url: signedUrl } };
 }
 
 // ============================================================
