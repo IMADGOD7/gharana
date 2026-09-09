@@ -1,6 +1,7 @@
 // ============================================================
 // Supabase Auth Middleware (T0.4)
-// Refreshes sessions on every request
+// Refreshes sessions on every request and handles stale tokens
+// gracefully instead of crashing with 'refresh_token_not_found'.
 // ============================================================
 
 import { createServerClient } from "@supabase/ssr";
@@ -17,7 +18,13 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
+        setAll(
+          cookiesToSet: Array<{
+            name: string;
+            value: string;
+            options?: Record<string, unknown>;
+          }>
+        ) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set({ name, value })
           );
@@ -30,7 +37,31 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  await supabase.auth.getUser();
+  // getUser() internally calls refreshSession() if the access token is
+  // expired. If the refresh token itself is invalid or not found (e.g. the
+  // user's Supabase session was revoked, or cookies crossed deployment
+  // domains), we catch the error and clear stale auth cookies so the user
+  // gets a clean redirect to /login instead of a 500 crash.
+  const { error } = await supabase.auth.getUser();
+
+  if (error?.code === "refresh_token_not_found" || error?.status === 400) {
+    // Delete all Supabase auth cookies to prevent an infinite refresh loop
+    const origin =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
+      request.nextUrl.origin;
+
+    const loginUrl = new URL("/login", origin);
+    const cleanResponse = NextResponse.redirect(loginUrl);
+
+    // Clear the stale sb-* auth cookies
+    request.cookies.getAll().forEach((cookie) => {
+      if (cookie.name.startsWith("sb-")) {
+        cleanResponse.cookies.delete(cookie.name);
+      }
+    });
+
+    return cleanResponse;
+  }
 
   return response;
 }
