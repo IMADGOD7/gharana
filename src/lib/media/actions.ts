@@ -64,13 +64,23 @@ async function authorizeProductAccess(productId: string) {
 }
 
 // ============================================================
-// Upload — server-side direct upload via Server Action
+// Upload — two-step direct-to-Storage flow
+//
+// Step 1: Client calls requestUploadUrl → server returns a
+//   signed PUT URL and storage path.
+// Step 2: Client PUTs the file directly to Storage (bytes
+//   never go through Next.js, no body limit).
+// Step 3: Client calls registerMedia → server inserts the
+//   DB record (the only Server Action payload — just metadata).
 // ============================================================
 
-export async function uploadMedia(
+export async function requestUploadUrl(
   productId: string,
-  formData: FormData
-): Promise<{ ok: true; data: MediaAssetRow } | { ok: false; error: string }> {
+  fileMeta: { fileName: string; fileSize: number; mimeType: string }
+): Promise<
+  | { ok: true; uploadUrl: string; storagePath: string; bucket: string; partnerId: string }
+  | { ok: false; error: string }
+> {
   try {
     const { profile, supabase, product } = await authorizeProductAccess(productId);
 
@@ -78,19 +88,19 @@ export async function uploadMedia(
       return { ok: false, error: "Only draft products can be edited" };
     }
 
-    const file = formData.get("file") as File | null;
-    if (!file || !(file instanceof File) || file.size === 0) {
-      return { ok: false, error: "No file provided" };
-    }
-
-    // Validate file
+    // Validate MIME type and size server-side (defense in depth)
     const { validateMediaFile } = await import("./storage");
-    const validation = validateMediaFile(file);
+    const fakeFile = {
+      name: fileMeta.fileName,
+      size: fileMeta.fileSize,
+      type: fileMeta.mimeType,
+    } as File;
+    const validation = validateMediaFile(fakeFile);
     if (!validation.ok) {
       return { ok: false, error: validation.error || "Invalid file" };
     }
 
-    // Get partner_id for path
+    // Resolve partner_id
     let partnerId: string | undefined;
     if (profile.role === "admin") {
       const { data: productRow } = await supabase
@@ -110,38 +120,76 @@ export async function uploadMedia(
       return { ok: false, error: "Unable to resolve partner account" };
     }
 
-    const bucket = getBucketForMimeType(file.type);
-    const mediaType = file.type.startsWith("video/") ? "video" : "image";
+    const bucket = getBucketForMimeType(fileMeta.mimeType);
     const storagePath = generateStoragePath({
       partnerId,
       productId,
-      fileName: file.name,
+      fileName: fileMeta.fileName,
     });
 
-    // Upload to Storage (server-side, authenticated as user — RLS will allow)
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(storagePath, file, {
-        contentType: file.type,
-        cacheControl: "3600",
-        upsert: false,
-      });
+    // Generate a signed upload URL (client PUTs directly to Storage)
+    const { data: signedData, error: signedError } =
+      await supabase.storage.from(bucket).createSignedUploadUrl(storagePath, { upsert: false });
 
-    if (uploadError) {
-      return { ok: false, error: `Upload failed: ${uploadError.message}` };
+    if (signedError || !signedData) {
+      return { ok: false, error: signedError?.message || "Failed to generate upload URL" };
     }
 
-    // Insert media metadata
+    return {
+      ok: true,
+      uploadUrl: signedData.signedUrl,
+      storagePath,
+      bucket,
+      partnerId,
+    };
+  } catch (err) {
+    console.error("[requestUploadUrl] unexpected error:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to prepare upload" };
+  }
+}
+
+export async function registerMedia(
+  productId: string,
+  meta: {
+    storagePath: string;
+    bucket: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    partnerId: string;
+  }
+): Promise<{ ok: true; data: MediaAssetRow } | { ok: false; error: string }> {
+  try {
+    const { profile, supabase, product } = await authorizeProductAccess(productId);
+
+    // Non-admin users can only upload to drafts
+    if (profile.role !== "admin" && product.status !== "draft") {
+      return { ok: false, error: "Only draft products can be edited" };
+    }
+
+    const mediaType = meta.mimeType.startsWith("video/") ? "video" : "image";
+
+    // Verify the file actually landed in Storage before creating the DB record
+    const { data: fileList, error: listError } = await supabase.storage
+      .from(meta.bucket)
+      .list(meta.storagePath.replace(/[^/]+$/, ""), {
+        search: meta.storagePath.split("/").pop(),
+      });
+
+    if (listError || !fileList || fileList.length === 0) {
+      return { ok: false, error: "Upload verification failed — file not found in storage" };
+    }
+
     const { data, error } = await supabase
       .from("product_media")
       .insert({
         product_id: productId,
-        partner_id: partnerId,
+        partner_id: meta.partnerId,
         media_type: mediaType,
-        storage_path: storagePath,
-        file_name: file.name,
-        file_size_bytes: file.size,
-        mime_type: file.type,
+        storage_path: meta.storagePath,
+        file_name: meta.fileName,
+        file_size_bytes: meta.fileSize,
+        mime_type: meta.mimeType,
         display_order: 0,
         is_primary: false,
       })
@@ -149,24 +197,14 @@ export async function uploadMedia(
       .single<MediaAssetRow>();
 
     if (error) {
-      // Try to clean up the uploaded file if metadata insert fails
-      await supabase.storage.from(bucket).remove([storagePath]);
       return { ok: false, error: `Failed to save media record: ${error.message}` };
     }
 
-    // Generate a signed URL so the client can display the preview immediately
-    let signedUrl: string | undefined;
-    try {
-      signedUrl = await createSignedUrlFromStorage(bucket, storagePath);
-    } catch {
-      // Non-fatal: the DB row is saved, preview can resolve on next refresh
-    }
-
     revalidatePath(`/dashboard/products/${productId}`);
-    return { ok: true, data: { ...data, signed_url: signedUrl } };
+    return { ok: true, data };
   } catch (err) {
-    console.error("[uploadMedia] unexpected error:", err);
-    return { ok: false, error: err instanceof Error ? err.message : "Upload failed. Please try again." };
+    console.error("[registerMedia] unexpected error:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to register media" };
   }
 }
 

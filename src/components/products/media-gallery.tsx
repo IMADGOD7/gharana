@@ -2,7 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Alert } from "@/components/ui/alert";
-import { uploadMedia, deleteMedia, setPrimaryMedia, getMediaDownloadUrl, getMediaSignedUrl } from "@/lib/media/actions";
+import {
+  requestUploadUrl,
+  registerMedia,
+  deleteMedia,
+  setPrimaryMedia,
+  getMediaDownloadUrl,
+  getMediaSignedUrl,
+} from "@/lib/media/actions";
 import type { MediaAssetRow, UploadProgress } from "@/lib/media/actions";
 import { Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -83,70 +90,134 @@ export function MediaGallery({ productId, initialMedia, isDraft }: MediaGalleryP
     }
   }
 
+  async function uploadFileToStorage(file: File, uploadUrl: string): Promise<void> {
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Storage upload failed: ${response.status} ${response.statusText}`);
+    }
+  }
+
+  async function doUpload(file: File) {
+    setUploadError(null);
+    setUploadSuccess(false);
+    setLastFailedFile(null);
+
+    // Step 0: Validate client-side first
+    const maxPhotoSize = 10 * 1024 * 1024;
+    const maxVideoSize = 100 * 1024 * 1024;
+    const allowedPhotoTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const allowedVideoTypes = ["video/mp4", "video/webm", "video/quicktime"];
+
+    const isPhoto = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+
+    if (!isPhoto && !isVideo) {
+      setUploadError(`Unsupported file type: ${file.type}`);
+      return;
+    }
+
+    if (isPhoto && !allowedPhotoTypes.includes(file.type)) {
+      setUploadError(`Unsupported image type: ${file.type}. Allowed: JPEG, PNG, WebP, GIF`);
+      return;
+    }
+
+    if (isVideo && !allowedVideoTypes.includes(file.type)) {
+      setUploadError(`Unsupported video type: ${file.type}. Allowed: MP4, WebM, MOV`);
+      return;
+    }
+
+    if (isPhoto && file.size > maxPhotoSize) {
+      setUploadError("Image too large. Maximum size is 10 MB.");
+      return;
+    }
+
+    if (isVideo && file.size > maxVideoSize) {
+      setUploadError("Video too large. Maximum size is 100 MB.");
+      return;
+    }
+
+    setUploading(true);
+
+    // Step 1: Get signed upload URL from server
+    setUploadProgress({ stage: "uploading", progress: 10, message: "Preparing upload..." });
+
+    const requestResult = await requestUploadUrl(productId, {
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type,
+    });
+
+    if (!requestResult.ok) {
+      setUploadProgress({ stage: "error", progress: 0, message: requestResult.error });
+      setUploadError(requestResult.error);
+      setLastFailedFile(file);
+      setUploading(false);
+      return;
+    }
+
+    const { uploadUrl, storagePath, bucket, partnerId } = requestResult;
+
+    // Step 2: Upload file directly to Storage
+    setUploadProgress({ stage: "uploading", progress: 30, message: "Uploading file..." });
+
+    try {
+      await uploadFileToStorage(file, uploadUrl);
+    } catch (err) {
+      setUploadProgress({
+        stage: "error",
+        progress: 0,
+        message: err instanceof Error ? err.message : "Upload failed",
+      });
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+      setLastFailedFile(file);
+      setUploading(false);
+      return;
+    }
+
+    // Step 3: Register metadata in DB
+    setUploadProgress({ stage: "saving", progress: 80, message: "Saving media info..." });
+
+    const registerResult = await registerMedia(productId, {
+      storagePath,
+      bucket,
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type,
+      partnerId,
+    });
+
+    if (!registerResult.ok) {
+      setUploadProgress({ stage: "error", progress: 0, message: registerResult.error });
+      setUploadError(registerResult.error);
+      setLastFailedFile(file);
+    } else {
+      const resolved = registerResult.data.signed_url
+        ? registerResult.data
+        : await resolveSignedUrl(registerResult.data);
+      setMedia((prev) => [...prev, resolved]);
+      setUploadProgress({ stage: "done", progress: 100, message: "Upload complete!" });
+      setUploadSuccess(true);
+      setUploadError(null);
+      setLastFailedFile(null);
+    }
+
+    setUploading(false);
+  }
+
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Prevent duplicate upload of the same file
-    if (lastFailedFile && lastFailedFile.name === file.name && lastFailedFile.size === file.size) {
-      setUploadError("This file already failed to upload. Use the retry button below.");
-      return;
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
 
-    setUploadError(null);
-    setUploadSuccess(false);
-    setUploading(true);
-    setLastFailedFile(null);
-
-    // Start progress animation
-    const cleanup = animateProgress();
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      setUploadProgress({ stage: "uploading", progress: 25, message: "Uploading file..." });
-
-      const result = await uploadMedia(productId, formData);
-
-      // Clean up animation
-      cleanup();
-
-      if (!result.ok) {
-        setUploadProgress({
-          stage: "error",
-          progress: 0,
-          message: result.error,
-        });
-        setUploadError(result.error);
-        setLastFailedFile(file);
-      } else if (result.ok && result.data) {
-        setUploadProgress({ stage: "done", progress: 100, message: "Upload complete!" });
-        // Server may already include a signed_url; resolve only if missing
-        const resolved = result.data.signed_url
-          ? result.data
-          : await resolveSignedUrl(result.data);
-        setMedia((prev) => [...prev, resolved]);
-        setUploadSuccess(true);
-        setUploadError(null);
-        setLastFailedFile(null);
-      }
-    } catch {
-      cleanup();
-      setUploadProgress({
-        stage: "error",
-        progress: 0,
-        message: "Upload failed. Please try again.",
-      });
-      setUploadError("Upload failed. Please try again.");
-      setLastFailedFile(file);
-    } finally {
-      setUploading(false);
-      // Reset input so the same file can be re-selected
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
+    await doUpload(file);
   }
 
   async function handleRetry() {
@@ -159,47 +230,9 @@ export function MediaGallery({ productId, initialMedia, isDraft }: MediaGalleryP
     const cleanup = animateProgress();
 
     try {
-      const formData = new FormData();
-      formData.append("file", lastFailedFile);
-
-      setUploadProgress({ stage: "uploading", progress: 25, message: "Retrying upload..." });
-
-      const result = await uploadMedia(productId, formData);
-
-      cleanup();
-
-      if (!result.ok) {
-        setUploadProgress({
-          stage: "error",
-          progress: 0,
-          message: result.error,
-        });
-        setUploadError(result.error);
-        setLastFailedFile(lastFailedFile);
-      } else if (result.ok && result.data) {
-        setUploadProgress({ stage: "done", progress: 100, message: "Upload complete!" });
-        const resolved = result.data.signed_url
-          ? result.data
-          : await resolveSignedUrl(result.data);
-        setMedia((prev) => [...prev, resolved]);
-        setUploadSuccess(true);
-        setUploadError(null);
-        setLastFailedFile(null);
-      }
-    } catch {
-      cleanup();
-      setUploadProgress({
-        stage: "error",
-        progress: 0,
-        message: "Upload failed. Please try again.",
-      });
-      setUploadError("Upload failed. Please try again.");
-      setLastFailedFile(lastFailedFile);
+      await doUpload(lastFailedFile);
     } finally {
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      cleanup();
     }
   }
 
