@@ -18,13 +18,16 @@ import { getBucketForMimeType, generateStoragePath, createSignedUrl as createSig
 export type MediaAssetRow = {
   id: string;
   product_id: string;
+  partner_id: string;
   media_type: "image" | "video";
   storage_path: string;
   file_name: string;
   file_size_bytes: number | null;
   mime_type: string | null;
+  checksum_sha256: string | null;
   display_order: number;
   is_primary: boolean;
+  caption: string | null;
   created_at: string;
   signed_url?: string;
 };
@@ -132,6 +135,7 @@ export async function uploadMedia(
     .from("product_media")
     .insert({
       product_id: productId,
+      partner_id: partnerId,
       media_type: mediaType,
       storage_path: storagePath,
       file_name: file.name,
