@@ -55,7 +55,8 @@ export const ensureProfile = cache(async (): Promise<Profile | null> => {
   const user = await getUser();
   if (!user) return null;
 
-  return ensureProfileForUser(user);
+  const supabase = await createServerClient();
+  return ensureProfileForUser(supabase, user);
 });
 
 /**
@@ -64,7 +65,7 @@ export const ensureProfile = cache(async (): Promise<Profile | null> => {
  * but request cookies don't yet carry the new auth tokens.
  */
 export async function ensureProfileForUser(
-  supabase: ReturnType<typeof createServerClient>,
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
   user: { id: string; email?: string | null; user_metadata?: { full_name?: string | null } }
 ): Promise<Profile | null> {
   const existing = await getProfileForUser(supabase, user.id);
@@ -103,7 +104,10 @@ export async function ensureProfileForUser(
   return created;
 }
 
-async function getProfileForUser(supabase: ReturnType<typeof createServerClient>, userId: string): Promise<Profile | null> {
+async function getProfileForUser(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  userId: string
+): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
