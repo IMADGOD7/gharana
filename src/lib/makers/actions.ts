@@ -77,14 +77,15 @@ export async function createMaker(productId: string, formData: FormData) {
 
   const name = String(formData.get("name") || "").trim();
   const craft_technique = String(formData.get("craft_technique") || "").trim();
-  const bio = String(formData.get("bio") || "").trim() || null;
+  const bio = String(formData.get("bio") || "").trim();
   const years_of_experience = formData.get("years_of_experience")
     ? parseInt(String(formData.get("years_of_experience")))
     : null;
   const location = String(formData.get("location") || "").trim() || null;
 
-  if (!name || !craft_technique) {
-    return { ok: false as const, error: "Name and craft technique are required" };
+  // Allow empty strings — DB defaults handle that. Only require a name to identify the maker.
+  if (!name) {
+    return { ok: false as const, error: "Maker name is required" };
   }
 
   const { error } = await supabase.from("makers").insert({
@@ -115,6 +116,93 @@ export async function addMakerAction(formData: FormData) {
     return { ok: false as const, error: "Missing product ID" };
   }
   return createMaker(productId, formData);
+}
+
+// ============================================================
+// Upsert a maker for a product (replaces if one already exists)
+// ============================================================
+export async function upsertMaker(productId: string, formData: FormData) {
+  const profile = await requireAuth();
+  const supabase = await createServerClient();
+
+  if (profile.role !== "admin") {
+    const { data: product } = await supabase
+      .from("products")
+      .select("partner_id, status")
+      .eq("id", productId)
+      .single<{ partner_id: string; status: string }>();
+
+    if (!product) {
+      return { ok: false as const, error: "Product not found" };
+    }
+
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
+
+    if (!partnerProfile || product.partner_id !== partnerProfile.id) {
+      return { ok: false as const, error: "Not authorized" };
+    }
+
+    if (product.status !== "draft") {
+      return { ok: false as const, error: "Only draft products can be edited" };
+    }
+  }
+
+  const name = String(formData.get("name") || "").trim();
+  const craft_technique = String(formData.get("craft_technique") || "").trim();
+  const bio = String(formData.get("bio") || "").trim();
+  const years_of_experience = formData.get("years_of_experience")
+    ? parseInt(String(formData.get("years_of_experience")))
+    : null;
+  const location = String(formData.get("location") || "").trim() || null;
+
+  // Allow empty strings — DB defaults handle that. Only require a name to identify the maker.
+  if (!name) {
+    return { ok: false as const, error: "Maker name is required" };
+  }
+
+  // Check if maker already exists for this product
+  const { data: existingMakers } = await supabase
+    .from("makers")
+    .select("id")
+    .eq("product_id", productId)
+    .limit(1);
+
+  let error: { message: string } | null = null;
+
+  if (existingMakers && existingMakers.length > 0) {
+    // Update existing maker
+    const { error: updateError } = await supabase
+      .from("makers")
+      .update({
+        name,
+        craft_technique,
+        bio,
+        years_of_experience: years_of_experience,
+        location,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("product_id", productId);
+    error = updateError;
+  } else {
+    // Insert new maker
+    const { error: insertError } = await supabase.from("makers").insert({
+      product_id: productId,
+      name,
+      craft_technique,
+      bio,
+      years_of_experience,
+      location,
+    });
+    error = insertError;
+  }
+
+  if (error) {
+    return { ok: false as const, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/products/${productId}`);
+  revalidatePath(`/dashboard/products/${productId}/makers`);
+  return { ok: true as const };
 }
 
 export async function deleteMaker(productId: string, makerId: string) {

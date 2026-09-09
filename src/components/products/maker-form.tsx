@@ -21,12 +21,13 @@ function SubmitButton() {
   );
 }
 
-export function MakerFormClient({ productId: _productId }: MakerFormProps) {
+export function MakerFormClient({ productId }: MakerFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   async function handleAction(formData: FormData) {
+    formData.set("productId", productId);
     setError(null);
     setSuccess(false);
     const result = await addMakerAction(formData);

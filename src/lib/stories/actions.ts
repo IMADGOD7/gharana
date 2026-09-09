@@ -66,7 +66,9 @@ export async function upsertProductStory(productId: string, formData: FormData) 
 
   const inspiration = String(formData.get("inspiration") || "").trim();
   const crafting_process = String(formData.get("crafting_process") || "").trim();
-  const cultural_context = String(formData.get("cultural_context") || "").trim() || null;
+  const materials_used = String(formData.get("materials_used") || "").trim();
+  const time_to_create = String(formData.get("time_to_create") || "").trim() || null;
+  const cultural_significance = String(formData.get("cultural_context") || "").trim();
 
   const { data: existing } = await supabase
     .from("product_stories")
@@ -77,7 +79,13 @@ export async function upsertProductStory(productId: string, formData: FormData) 
   if (existing) {
     const { error } = await supabase
       .from("product_stories")
-      .update({ inspiration, crafting_process, cultural_context })
+      .update({
+        inspiration,
+        crafting_process,
+        materials_used,
+        time_to_create,
+        cultural_significance,
+      })
       .eq("product_id", productId);
 
     if (error) {
@@ -86,7 +94,14 @@ export async function upsertProductStory(productId: string, formData: FormData) 
   } else {
     const { error } = await supabase
       .from("product_stories")
-      .insert({ product_id: productId, inspiration, crafting_process, cultural_context });
+      .insert({
+        product_id: productId,
+        inspiration,
+        crafting_process,
+        materials_used,
+        time_to_create,
+        cultural_significance,
+      });
 
     if (error) {
       return { ok: false as const, error: error.message };

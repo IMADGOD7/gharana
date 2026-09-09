@@ -4,10 +4,10 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { updateProfile, updateBrandProfile } from "@/lib/auth/actions";
 import { cn } from "@/lib/utils";
-import { User, Store, Lock } from "lucide-react";
+import { User, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type Tab = "personal" | "brand" | "security";
+type Tab = "personal" | "brand";
 
 interface ProfileData {
   full_name: string;
@@ -17,6 +17,7 @@ interface ProfileData {
 
 interface PartnerBrandProfile {
   brand_name: string;
+  brand_tagline: string | null;
   bio: string | null;
   address_line1: string | null;
   city: string | null;
@@ -33,7 +34,6 @@ interface ProfileFormProps {
 const TABS: { key: Tab; label: string; icon: typeof User }[] = [
   { key: "personal", label: "Personal Details", icon: User },
   { key: "brand", label: "Brand & Workshop", icon: Store },
-  { key: "security", label: "Security", icon: Lock },
 ];
 
 function SubmitButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
@@ -121,7 +121,6 @@ export function ProfileForm({ profile, partnerProfile }: ProfileFormProps) {
             onError={(err) => setError(err)}
           />
         )}
-        {activeTab === "security" && <SecurityTab />}
       </div>
     </div>
   );
@@ -217,6 +216,7 @@ function BrandTab({ onSuccess, onError, partnerProfile }: {
 
   const brand = partnerProfile ?? {
     brand_name: "",
+    brand_tagline: null,
     bio: null,
     address_line1: null,
     city: null,
@@ -256,7 +256,7 @@ function BrandTab({ onSuccess, onError, partnerProfile }: {
             id="brand_tagline"
             name="brand_tagline"
             type="text"
-            defaultValue={brand.bio || ""}
+            defaultValue={brand.brand_tagline || ""}
             suppressHydrationWarning
             className="input-focus"
             placeholder="A short tagline for your brand"
@@ -357,35 +357,6 @@ function BrandTab({ onSuccess, onError, partnerProfile }: {
 
         <SubmitButton />
       </form>
-    </div>
-  );
-}
-
-function SecurityTab() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900">Security</h3>
-        <p className="mt-1 text-sm text-gray-500">Manage your account security</p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="rounded-lg border border-gray-200 p-4">
-          <h4 className="text-sm font-medium text-gray-900">Password</h4>
-          <p className="text-xs text-gray-500 mt-1">Change your account password</p>
-          <button
-            type="button"
-            className="btn-secondary mt-3 text-xs"
-          >
-            Change Password
-          </button>
-        </div>
-
-        <div className="rounded-lg border border-gray-200 p-4">
-          <h4 className="text-sm font-medium text-gray-900">Active Sessions</h4>
-          <p className="text-xs text-gray-500 mt-1">You have 1 active session</p>
-        </div>
-      </div>
     </div>
   );
 }

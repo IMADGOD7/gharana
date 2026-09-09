@@ -1,11 +1,16 @@
+// ============================================================
+// Reset Password Form — Client Component (T0.4)
+// Handles password update via useFormState after the
+// server-side code exchange has established a session.
+// ============================================================
+
 "use client";
 
-import Link from "next/link";
 import { useActionState } from "react";
-import { forgotPassword } from "@/lib/auth/actions";
+import { resetPassword } from "@/lib/auth/actions";
 
-export default function ForgotPasswordPage() {
-  const [state, formAction] = useActionState(forgotPassword, null);
+export function ResetPasswordForm() {
+  const [state, formAction] = useActionState(resetPassword, null);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -18,13 +23,13 @@ export default function ForgotPasswordPage() {
           <p className="text-caption mt-1">Partner Portal</p>
         </div>
         <div className="card p-7">
-          <h2 className="text-h2 mb-4">Reset password</h2>
+          <h2 className="text-h2 mb-4">Set new password</h2>
           <p className="text-body mb-5 text-foreground/70">
-            Enter your email address and we&apos;ll send you a link to reset your password.
+            Choose a new password for your account.
           </p>
           {state && !state.ok && (
             <div className="mb-4 rounded-lg border border-status-rejected/30 bg-status-rejected/10 px-4 py-3 text-body text-status-rejected">
-              {state.error}
+              {(state as { error: string }).error}
             </div>
           )}
           {state?.ok && (
@@ -34,31 +39,38 @@ export default function ForgotPasswordPage() {
           )}
           <form action={formAction} className="space-y-5">
             <div>
-              <label htmlFor="email" className="text-body mb-1.5 block font-medium">
-                Email
+              <label htmlFor="password" className="text-body mb-1.5 block font-medium">
+                New password
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
+                id="password"
+                name="password"
+                type="password"
                 required
-                autoComplete="email"
+                minLength={8}
                 className="input-focus w-full"
-                placeholder="you@example.com"
+                placeholder="At least 8 characters"
               />
             </div>
-
+            <div>
+              <label htmlFor="confirm_password" className="text-body mb-1.5 block font-medium">
+                Confirm password
+              </label>
+              <input
+                id="confirm_password"
+                name="confirm_password"
+                type="password"
+                required
+                minLength={8}
+                className="input-focus w-full"
+                placeholder="Repeat your password"
+              />
+            </div>
             <button type="submit" className="btn-primary w-full">
-              Send reset link
+              Update password
             </button>
           </form>
         </div>
-        <p className="text-caption mt-5 text-center">
-          Remember your password?{" "}
-          <Link href="/login" className="font-medium text-brand hover:underline">
-            Sign in
-          </Link>
-        </p>
       </div>
     </div>
   );

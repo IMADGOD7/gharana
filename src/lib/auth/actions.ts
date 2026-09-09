@@ -14,6 +14,68 @@ export type AuthResult =
   | { ok: true; message: string }
   | { ok: false; error: string };
 
+// ============================================================
+// Password Reset
+// ============================================================
+
+export async function forgotPassword(
+  _prev: AuthResult | null,
+  formData: FormData
+): Promise<AuthResult> {
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+
+  if (!email) {
+    return { ok: false, error: "Email is required" };
+  }
+
+  const supabase = await createServerClient();
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: "/auth/reset-password",
+  });
+
+  // Always return success to avoid leaking which emails are registered
+  if (error) {
+    // Log the error server-side for debugging, but don't expose it
+    console.error("[auth] Password reset error:", error.message);
+  }
+
+  return { ok: true, message: "Check your email for a reset link" };
+}
+
+export async function resetPassword(
+  _prev: AuthResult | null,
+  formData: FormData
+): Promise<AuthResult> {
+  const password = String(formData.get("password") || "");
+  const confirmPassword = String(formData.get("confirm_password") || "");
+
+  if (!password) {
+    return { ok: false, error: "Password is required" };
+  }
+
+  if (password.length < 8) {
+    return { ok: false, error: "Password must be at least 8 characters" };
+  }
+
+  if (password !== confirmPassword) {
+    return { ok: false, error: "Passwords do not match" };
+  }
+
+  const supabase = await createServerClient();
+
+  const { error } = await supabase.auth.updateUser({
+    password,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Password updated successfully" };
+}
+
 export async function updateBrandProfile(
   _prev: AuthResult | null,
   formData: FormData
@@ -30,6 +92,7 @@ export async function updateBrandProfile(
   }
 
   const brand_name = String(formData.get("brand_name") || "").trim();
+  const brand_tagline = String(formData.get("brand_tagline") || "").trim() || null;
   const brand_bio = String(formData.get("brand_bio") || "").trim() || null;
   const address = String(formData.get("address") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
@@ -41,6 +104,7 @@ export async function updateBrandProfile(
     .from("partner_profiles")
     .update({
       brand_name: brand_name || undefined,
+      brand_tagline,
       bio: brand_bio,
       address_line1: address,
       city,
@@ -81,14 +145,12 @@ export async function signUp(
 
   const supabase = await createServerClient();
 
-  const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || ""}/auth/callback`;
-
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { full_name: fullName },
-      emailRedirectTo: redirectUrl,
+      emailRedirectTo: "/auth/callback",
     },
   });
 

@@ -1,5 +1,6 @@
 import { getProduct, getSubmissionHistory } from "@/lib/products/actions";
 import { getProductMedia, getMediaSignedUrl } from "@/lib/media/actions";
+import { getMakers } from "@/lib/makers/actions";
 import { notFound } from "next/navigation";
 import { MediaGallery, type MediaItem } from "@/components/products/media-gallery";
 import { SubmissionTimeline } from "@/components/shared/submission-timeline";
@@ -24,7 +25,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   }
 
   const story = (product as ProductWithRelations).product_stories;
-  const makers = (product as ProductWithRelations).makers;
+  const makers = await getMakers(id);
   const submissionHistory = await getSubmissionHistory(id);
 
   const rawMedia = await getProductMedia(id);
@@ -136,7 +137,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           <MediaGallery
             productId={id}
             initialMedia={media}
-            isDraft={isDraft}
+            isDraft={false}
           />
         </div>
 

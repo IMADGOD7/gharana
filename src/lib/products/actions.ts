@@ -62,7 +62,7 @@ export type ProductWithRelations = ProductRow & {
     media_type: string;
     storage_path: string;
     caption: string | null;
-    sort_order: number;
+    display_order: number;
     created_at: string;
   }>;
 };
@@ -446,6 +446,61 @@ export async function upsertProductDraft(
   return { ok: true, productId: data.id };
 }
 
+/* ============================================================
+ * Upsert product story
+ * ============================================================ */
+export async function upsertProductStory(
+  productId: string,
+  formData: FormData
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const profile = await requireAuth();
+  const supabase = await createServerClient();
+
+  if (profile.role !== "admin") {
+    const { data: product } = await supabase
+      .from("products")
+      .select("partner_id, status")
+      .eq("id", productId)
+      .single<{ partner_id: string; status: string }>();
+
+    if (!product) return { ok: false, error: "Product not found" };
+
+    const partnerProfile = await getOrCreatePartnerProfile(supabase, profile.id);
+    if (!partnerProfile || product.partner_id !== partnerProfile.id) {
+      return { ok: false, error: "Not authorized" };
+    }
+
+    if (product.status !== "draft") {
+      return { ok: false, error: "Only draft products can be edited" };
+    }
+  }
+
+  const inspiration = String(formData.get("inspiration") || "").trim();
+  const crafting_process = String(formData.get("crafting_process") || "").trim();
+  const cultural_context = String(formData.get("cultural_context") || "").trim();
+
+  // Upsert by product_id — a product has at most one story
+  const { error } = await supabase
+    .from("product_stories")
+    .upsert(
+      {
+        product_id: productId,
+        inspiration,
+        crafting_process,
+        cultural_context,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "product_id" }
+    );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/products/${productId}`);
+  return { ok: true };
+}
+
 export async function submitProduct(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const profile = await requireAuth();
   const supabase = await createServerClient();
@@ -613,10 +668,10 @@ export async function getPartnerProductsWithMedia(options: {
   const productIds = products.map((p) => p.id);
   const { data: mediaRows } = await supabase
     .from("product_media")
-    .select("product_id, storage_path, media_type, file_name, is_primary, sort_order")
+    .select("product_id, storage_path, media_type, file_name, is_primary, display_order")
     .in("product_id", productIds)
     .eq("is_primary", true)
-    .order("sort_order", { ascending: true });
+    .order("display_order", { ascending: true });
 
   const primaryByProduct = new Map<string, {
     storage_path: string;

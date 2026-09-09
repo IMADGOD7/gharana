@@ -27,7 +27,7 @@ export const getSession = cache(async () => {
 export const getUser = cache(async () => {
   const supabase = await createServerClient();
   const { data, error } = await supabase.auth.getUser();
-  if (error) {
+  if (error && !(error as unknown as { __isAuthError?: boolean }).__isAuthError) {
     console.error("[getUser] auth.getUser() failed:", error);
   }
   return data.user ?? null;

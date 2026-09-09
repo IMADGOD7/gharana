@@ -20,6 +20,11 @@ import {
   type AutosaveStatus,
 } from "@/lib/products/actions";
 import type { ProductFormData } from "@/lib/products/actions";
+import { upsertProductStory, getProductStory } from "@/lib/stories/actions";
+import { upsertMaker, getMakers } from "@/lib/makers/actions";
+import { MediaGallery } from "@/components/products/media-gallery";
+import { getProductMedia } from "@/lib/media/actions";
+import type { MediaAssetRow } from "@/lib/media/actions";
 
 const STORAGE_KEY = "pandaverse-wizard-recovery";
 
@@ -29,6 +34,7 @@ interface StoryState {
   materials_used: string;
   time_to_create: string;
   cultural_significance: string;
+  touched: boolean;
 }
 
 interface MakerState {
@@ -37,6 +43,7 @@ interface MakerState {
   craft_technique: string;
   years_of_experience: string;
   location: string;
+  touched: boolean;
 }
 
 interface ProductWizardProps {
@@ -102,6 +109,26 @@ function buildFormData(formData: ProductFormData): FormData {
   return fd;
 }
 
+function buildStoryFormData(storyData: StoryState): FormData {
+  const fd = new FormData();
+  fd.set("inspiration", storyData.inspiration);
+  fd.set("crafting_process", storyData.crafting_process);
+  fd.set("materials_used", storyData.materials_used);
+  fd.set("time_to_create", storyData.time_to_create);
+  fd.set("cultural_context", storyData.cultural_significance);
+  return fd;
+}
+
+function buildMakerFormData(makerData: MakerState): FormData {
+  const fd = new FormData();
+  fd.set("name", makerData.name);
+  fd.set("craft_technique", makerData.craft_technique);
+  fd.set("bio", makerData.bio || "");
+  fd.set("years_of_experience", makerData.years_of_experience);
+  fd.set("location", makerData.location || "");
+  return fd;
+}
+
 function CheckSvg({ className }: { className?: string }) {
   return (
     <svg className={className || "h-4 w-4"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -149,6 +176,7 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
     materials_used: "",
     time_to_create: "",
     cultural_significance: "",
+    touched: false,
   });
 
   const [makerData, setMakerData] = useState<MakerState>({
@@ -157,6 +185,7 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
     craft_technique: "",
     years_of_experience: "",
     location: "",
+    touched: false,
   });
 
   // Restore from local recovery on mount
@@ -176,12 +205,59 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
     }
 
     setFormData(recovery.formData);
-    setStoryData(recovery.storyData);
-    setMakerData(recovery.makerData);
+    setStoryData({ ...recovery.storyData, touched: true });
+    setMakerData({ ...recovery.makerData, touched: true });
     setTouched(true);
     setAutosaveStatus("error");
     setError("You have unsaved local changes. They have been restored from your last session.");
   }, []);
+
+  // Load story + maker data when editing an existing draft
+  useEffect(() => {
+    if (mode !== "edit" || !productId) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [story, makers] = await Promise.all([
+          getProductStory(productId),
+          getMakers(productId),
+        ]);
+
+        if (cancelled) return;
+
+        if (story) {
+          setStoryData({
+            inspiration: story.inspiration ?? "",
+            crafting_process: story.crafting_process ?? "",
+            materials_used: story.materials_used ?? "",
+            time_to_create: story.time_to_create ?? "",
+            cultural_significance: story.cultural_context ?? "",
+            touched: false,
+          });
+        }
+
+        if (makers && makers.length > 0) {
+          const m = makers[0]!;
+          setMakerData({
+            name: m.name ?? "",
+            bio: m.bio ?? "",
+            craft_technique: m.craft_technique ?? "",
+            years_of_experience: m.years_of_experience?.toString() ?? "",
+            location: m.location ?? "",
+            touched: false,
+          });
+        }
+      } catch {
+        // Silently ignore — story/maker are optional
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, productId]);
 
   // Persist to localStorage whenever local state changes
   const persistLocalState = useCallback(() => {
@@ -195,14 +271,19 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
     saveRecoveryState(state);
   }, [formData, storyData, makerData]);
 
-  // Debounced autosave: fires 2 seconds after last change
+  // Debounced autosave: fires 2 seconds after last change in any section
+  // (product basics, story, or maker). Each section's edit triggers the
+  // effect via its touched flag, and we save whichever sections changed.
   useEffect(() => {
     if (isSubmittingRef.current) return;
 
-    // Don't autosave an untouched blank form
-    if (!touched) return;
+    // Don't autosave an untouched form
+    if (!touched && !storyData.touched && !makerData.touched) return;
+    // Don't autosave until basics have at least a title (required to create the draft)
+    if (!formData.title.trim()) return;
 
     setAutosaveStatus("idle");
+    setError(null);
 
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -217,8 +298,32 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
           if (result.productId && !productIdRef.current) {
             productIdRef.current = result.productId;
           }
+          // Also persist story and maker data on autosave
+          if (productIdRef.current) {
+            if (storyData.touched) {
+              const storyFd = buildStoryFormData(storyData);
+              const storyResult = await upsertProductStory(productIdRef.current, storyFd);
+              if (!storyResult.ok) {
+                setAutosaveStatus("error");
+                setError(storyResult.error || "Failed to save story.");
+                persistLocalState();
+                return;
+              }
+            }
+            if (makerData.touched) {
+              const makerFd = buildMakerFormData(makerData);
+              const makerResult = await upsertMaker(productIdRef.current, makerFd);
+              if (!makerResult.ok) {
+                setAutosaveStatus("error");
+                setError(makerResult.error || "Failed to save maker info.");
+                persistLocalState();
+                return;
+              }
+            }
+          }
           setAutosaveStatus("saved");
           clearRecoveryState();
+          setError(null);
         } else {
           setAutosaveStatus("error");
           setError(result.error || "Autosave failed. Your changes are saved locally.");
@@ -245,9 +350,6 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
 
   const canGoNext = () => {
     if (step === 0) {
-      if (formData.title.trim().length > 0 || formData.description.trim().length > 0) {
-        setTouched(true);
-      }
       return formData.title.trim().length > 0 && formData.description.trim().length > 0;
     }
     return true;
@@ -257,23 +359,40 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
     setSaving(true);
     setError(null);
 
-    const fd = buildFormData(formData);
-
     try {
-      const result = await upsertProductDraft(productIdRef.current, fd);
+      // 1. Save product basics (creates draft on first save, updates on subsequent)
+      const basicsFd = buildFormData(formData);
+      const result = await upsertProductDraft(productIdRef.current, basicsFd);
       if (result.ok) {
         if (result.productId && !productIdRef.current) {
           productIdRef.current = result.productId;
         }
-        clearRecoveryState();
-        setAutosaveStatus("saved");
       } else {
-        setError(result.error ?? "Autosave failed. Your changes are saved locally.");
-        setAutosaveStatus("error");
-        persistLocalState();
+        throw new Error(result.error || "Failed to save product basics");
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
+
+      // 2. Save story data if touched and we now have a productId
+      if (productIdRef.current && storyData.touched) {
+        const storyFd = buildStoryFormData(storyData);
+        const storyResult = await upsertProductStory(productIdRef.current, storyFd);
+        if (!storyResult.ok) {
+          console.warn("Story save warning:", storyResult.error);
+        }
+      }
+
+      // 3. Save maker data if touched — upsert to handle existing records
+      if (productIdRef.current && makerData.touched) {
+        const makerFd = buildMakerFormData(makerData);
+        const makerResult = await upsertMaker(productIdRef.current, makerFd);
+        if (!makerResult.ok) {
+          console.warn("Maker save warning:", makerResult.error);
+        }
+      }
+
+      clearRecoveryState();
+      setAutosaveStatus("saved");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setAutosaveStatus("error");
       persistLocalState();
     } finally {
@@ -287,7 +406,7 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
     setSaving(true);
     setError(null);
 
-    // First ensure the latest draft is persisted
+    // First ensure the latest draft is persisted, including story and maker data
     const fd = buildFormData(formData);
     try {
       const draftResult = await upsertProductDraft(productIdRef.current, fd);
@@ -300,6 +419,31 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
       if (draftResult.productId && !productIdRef.current) {
         productIdRef.current = draftResult.productId;
       }
+
+      // Persist story data if touched
+      if (productIdRef.current && storyData.touched) {
+        const storyFd = buildStoryFormData(storyData);
+        const storyResult = await upsertProductStory(productIdRef.current, storyFd);
+        if (!storyResult.ok) {
+          setError(storyResult.error || "Could not save story before submission.");
+          setSaving(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+      }
+
+      // Persist maker data if touched
+      if (productIdRef.current && makerData.touched) {
+        const makerFd = buildMakerFormData(makerData);
+        const makerResult = await upsertMaker(productIdRef.current, makerFd);
+        if (!makerResult.ok) {
+          setError(makerResult.error || "Could not save maker info before submission.");
+          setSaving(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+      }
+
       clearRecoveryState();
     } catch {
       setError("Could not save draft before submission. Please try again.");
@@ -418,10 +562,15 @@ export function ProductWizard({ mode, productId, initial }: ProductWizardProps) 
               <MakerStep makerData={makerData} setMakerData={setMakerData} setTouched={setTouched} />
             )}
             {step === 3 && (
-              <MediaGalleryStep productId={productId} mode={mode} />
+              <MediaGalleryStep productId={productId} mode={mode} productIdRef={productIdRef} />
             )}
             {step === 4 && (
-              <ReviewStep formData={formData} storyData={storyData} makerData={makerData} />
+              <ReviewStep
+                formData={formData}
+                storyData={storyData}
+                makerData={makerData}
+                productId={productIdRef.current}
+              />
             )}
           </div>
 
@@ -518,10 +667,7 @@ function BasicsStep({
       </div>
 
       <div className="space-y-4">
-        <div>
-          <label htmlFor="title" className="mb-1.5 block text-sm font-medium text-gray-700">
-            Product Title <span className="text-red-500">*</span>
-          </label>
+        <FieldWrapper label="Product Title" required>
           <input
             id="title"
             name="title"
@@ -532,12 +678,9 @@ function BasicsStep({
             className="input-focus"
             placeholder="e.g., Handwoven Silk Scarf — Madhubani Pattern"
           />
-        </div>
+        </FieldWrapper>
 
-        <div>
-          <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-gray-700">
-            Description <span className="text-red-500">*</span>
-          </label>
+        <FieldWrapper label="Description" required>
           <textarea
             id="description"
             name="description"
@@ -548,12 +691,9 @@ function BasicsStep({
             className="input-focus resize-none"
             placeholder="Describe your product in detail — materials, dimensions, care instructions..."
           />
-        </div>
+        </FieldWrapper>
 
-        <div>
-          <label htmlFor="category" className="mb-1.5 block text-sm font-medium text-gray-700">
-            Category
-          </label>
+        <FieldWrapper label="Category">
           <select
             id="category"
             name="category"
@@ -570,12 +710,9 @@ function BasicsStep({
             <option value="furniture">Furniture</option>
             <option value="other">Other</option>
           </select>
-        </div>
+        </FieldWrapper>
 
-        <div>
-          <label htmlFor="tags" className="mb-1.5 block text-sm font-medium text-gray-700">
-            Tags
-          </label>
+        <FieldWrapper label="Tags">
           <input
             id="tags"
             name="tags"
@@ -586,13 +723,10 @@ function BasicsStep({
             placeholder="handmade, silk, traditional (comma-separated)"
           />
           <p className="mt-1 text-xs text-gray-400">Separate tags with commas</p>
-        </div>
+        </FieldWrapper>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label htmlFor="price_min" className="mb-1.5 block text-sm font-medium text-gray-700">
-              Min Price
-            </label>
+          <FieldWrapper label="Min Price">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">₹</span>
               <input
@@ -607,11 +741,8 @@ function BasicsStep({
                 placeholder="0.00"
               />
             </div>
-          </div>
-          <div>
-            <label htmlFor="price_max" className="mb-1.5 block text-sm font-medium text-gray-700">
-              Max Price
-            </label>
+          </FieldWrapper>
+          <FieldWrapper label="Max Price">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">₹</span>
               <input
@@ -626,11 +757,8 @@ function BasicsStep({
                 placeholder="0.00"
               />
             </div>
-          </div>
-          <div>
-            <label htmlFor="currency" className="mb-1.5 block text-sm font-medium text-gray-700">
-              Currency
-            </label>
+          </FieldWrapper>
+          <FieldWrapper label="Currency">
             <input
               id="currency"
               name="currency"
@@ -640,7 +768,7 @@ function BasicsStep({
               className="input-focus"
               placeholder="INR"
             />
-          </div>
+          </FieldWrapper>
         </div>
       </div>
     </div>
@@ -657,7 +785,7 @@ function StoryStep({
   setTouched: (v: boolean) => void;
 }) {
   const update = (field: keyof StoryState, value: string) => {
-    setStoryData((prev) => ({ ...prev, [field]: value }));
+    setStoryData((prev) => ({ ...prev, [field]: value, touched: true }));
     setTouched(true);
   };
 
@@ -674,6 +802,7 @@ function StoryStep({
         <FieldWrapper label="What inspired this design or collection?" required>
           <textarea
             rows={3}
+            required
             value={storyData.inspiration}
             onChange={(e) => update("inspiration", e.target.value)}
             className="input-focus resize-none"
@@ -735,7 +864,7 @@ function MakerStep({
   setTouched: (v: boolean) => void;
 }) {
   const update = (field: keyof MakerState, value: string) => {
-    setMakerData((prev) => ({ ...prev, [field]: value }));
+    setMakerData((prev) => ({ ...prev, [field]: value, touched: true }));
     setTouched(true);
   };
 
@@ -752,6 +881,7 @@ function MakerStep({
         <FieldWrapper label="Artisan Name" required>
           <input
             type="text"
+            required
             value={makerData.name}
             onChange={(e) => update("name", e.target.value)}
             className="input-focus"
@@ -809,11 +939,46 @@ function ReviewStep({
   formData,
   storyData,
   makerData,
+  productId,
 }: {
   formData: ProductFormData;
   storyData: StoryState;
   makerData: MakerState;
+  productId?: string;
 }) {
+  const [dbMakers, setDbMakers] = useState<Array<{
+    id: string;
+    name: string;
+    craft_technique: string;
+    location: string | null;
+  }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!productId) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const makers = await getMakers(productId);
+        if (cancelled) return;
+        setDbMakers(makers);
+      } catch {
+        // If DB fetch fails, proceed with wizard state only
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [productId]);
+
+  // Use DB data as source of truth for makers, but fall back to wizard state if no DB data yet
+  const effectiveMakers = dbMakers.length > 0
+    ? dbMakers
+    : (makerData.name ? [{ id: "local", name: makerData.name, craft_technique: makerData.craft_technique, location: makerData.location || null }] : []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -823,6 +988,11 @@ function ReviewStep({
         </p>
       </div>
 
+      {loading ? (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 text-center">
+          <p className="text-sm text-gray-500">Loading preview...</p>
+        </div>
+      ) : (
       <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-6 space-y-6">
         {/* Product Preview */}
         <div>
@@ -857,21 +1027,26 @@ function ReviewStep({
         )}
 
         {/* Maker Preview */}
-        {makerData.name && (
+        {effectiveMakers.length > 0 && (
           <div>
             <h4 className="text-sm font-semibold text-gray-900 mb-3">Maker</h4>
-            <div className="rounded-lg bg-white border border-gray-200 p-4">
-              <p className="text-sm font-medium text-gray-900">{makerData.name}</p>
-              {makerData.craft_technique && (
-                <p className="text-sm text-gray-500">{makerData.craft_technique}</p>
-              )}
-              {makerData.location && (
-                <p className="text-xs text-gray-400 mt-1">{makerData.location}</p>
-              )}
+            <div className="rounded-lg bg-white border border-gray-200 p-4 space-y-2">
+              {effectiveMakers.map((maker) => (
+                <div key={maker.id}>
+                  <p className="text-sm font-medium text-gray-900">{maker.name}</p>
+                  {maker.craft_technique && (
+                    <p className="text-sm text-gray-500">{maker.craft_technique}</p>
+                  )}
+                  {maker.location && (
+                    <p className="text-xs text-gray-400 mt-1">{maker.location}</p>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -898,28 +1073,67 @@ function FieldWrapper({
 
 /* ============================================================
  * Step 4: Media Gallery
- * Placeholder for now — full integration with MediaGallery
- * component requires productId to be available on creation mode.
+ * Uses the shared MediaGallery component.
+ * In create mode, requires a saved productId (draft must exist).
  * ============================================================ */
-function MediaGalleryStep({ productId: _productId, mode }: { productId?: string; mode: "create" | "edit" }) {
+function MediaGalleryStep({
+  productId,
+  mode,
+  productIdRef,
+}: {
+  productId?: string;
+  mode: "create" | "edit";
+  productIdRef: React.MutableRefObject<string | undefined>;
+}) {
+  // In create mode, use the ref's productId (set after first draft save)
+  // rather than the prop, which stays undefined until page reload.
+  const resolvedId = mode === "create" ? productIdRef.current : productId;
+  const [media, setMedia] = useState<MediaAssetRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!resolvedId) {
+      setLoading(false);
+      return;
+    }
+    getProductMedia(resolvedId).then((data) => {
+      setMedia(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [resolvedId]);
+
+  if (!resolvedId && mode === "create") {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Media Gallery</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Upload photos and videos to showcase your product.
+          </p>
+        </div>
+        <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-6 text-center">
+          <p className="text-sm text-amber-800">
+            Save your draft first, then come back to this step to upload media.
+          </p>
+          <p className="text-xs text-amber-600 mt-1">
+            Your product needs a product ID before media can be attached.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!resolvedId) {
+    return null;
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900">Media Gallery</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Upload photos and videos to showcase your product.
-        </p>
-      </div>
-
-      <div className="rounded-xl border-2 border-dashed border-gray-300 p-8 text-center">
-        <ImageLucide className="mx-auto h-10 w-10 text-gray-400 mb-3" />
-        <p className="text-sm font-medium text-gray-700">Photos and videos</p>
-        <p className="text-xs text-gray-400 mt-1">
-          {mode === "create"
-            ? "Save your product as a draft first, then upload photos and videos from the product page."
-            : "Once your product is saved, you can upload photos (up to 10MB) and videos (up to 100MB)."}
-        </p>
-      </div>
+      {loading ? (
+        <p className="text-sm text-gray-500">Loading media...</p>
+      ) : (
+        <MediaGallery productId={resolvedId} initialMedia={media} isDraft={true} />
+      )}
     </div>
   );
 }
