@@ -31,7 +31,7 @@ export async function forgotPassword(
   const supabase = await createServerClient();
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: "/auth/reset-password",
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/reset-password`,
   });
 
   // Always return success to avoid leaking which emails are registered
@@ -150,7 +150,7 @@ export async function signUp(
     password,
     options: {
       data: { full_name: fullName },
-      emailRedirectTo: "/auth/callback",
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
     },
   });
 
