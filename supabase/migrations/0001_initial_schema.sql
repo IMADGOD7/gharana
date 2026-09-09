@@ -147,6 +147,7 @@ comment on table public.makers is 'Artisan/maker information for a product.';
 create table public.product_media (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
+  partner_id uuid not null references public.partner_profiles(id) on delete cascade,
   media_type media_type not null,
   storage_path text not null,
   file_name text not null,
