@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
 
     console.warn("[auth/callback] exchangeCodeForSession failed:", error?.message);
     return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent(error?.message ?? "exchange_failed")}`
+      `${origin}/auth/callback/error?error=${encodeURIComponent(error?.message ?? "exchange_failed")}`
     );
   }
 
